@@ -32,7 +32,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   config :mode, :validate => ["server", "client"], :default => "client"
 
   # The format to use when writing events to the file. This value
-  # supports any string and can include %{name} and other dynamic
+  # supports any string and can include `%{name}` and other dynamic
   # strings.
   #
   # If this setting is omitted, the full json representation of the
