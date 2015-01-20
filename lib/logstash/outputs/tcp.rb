@@ -12,7 +12,6 @@ require "thread"
 class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   config_name "tcp"
-  milestone 2
 
   default :codec, "json"
 
