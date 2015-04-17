@@ -67,6 +67,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   public
   def register
+    require "socket"
     require "stud/try"
     if server?
       workers_not_supported
