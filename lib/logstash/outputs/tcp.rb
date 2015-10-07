@@ -132,7 +132,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   public
   def receive(event)
-    return unless output?(event)
+    
 
     #if @message_format
       #output = event.sprintf(@message_format) + "\n"
