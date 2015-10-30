@@ -85,27 +85,33 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     end # def write
   end # class Client
 
+  private
+  def setup_ssl
+    require "openssl"
+
+    @ssl_context = OpenSSL::SSL::SSLContext.new
+    @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
+    @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
+    if @ssl_verify
+      @cert_store = OpenSSL::X509::Store.new
+      # Load the system default certificate path to the store
+      @cert_store.set_default_paths
+      if File.directory?(@ssl_cacert)
+        @cert_store.add_path(@ssl_cacert)
+      else
+        @cert_store.add_file(@ssl_cacert)
+      end
+      @ssl_context.cert_store = @cert_store
+      @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+    end
+  end # def setup_ssl
+
   public
   def register
     require "socket"
     require "stud/try"
-    require "openssl"
     if @ssl_enable
-      @ssl_context = OpenSSL::SSL::SSLContext.new
-      @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
-      @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
-      if @ssl_verify
-        @cert_store = OpenSSL::X509::Store.new
-        # Load the system default certificate path to the store
-        @cert_store.set_default_paths
-        if File.directory?(@ssl_cacert)
-          @cert_store.add_path(@ssl_cacert)
-        else
-          @cert_store.add_file(@ssl_cacert)
-        end
-        @ssl_context.cert_store = @cert_store
-        @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
-      end
+      setup_ssl
     end # @ssl_enable
 
     if server?
