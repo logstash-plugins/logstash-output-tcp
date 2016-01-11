@@ -30,6 +30,8 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # `client` connects to a server.
   config :mode, :validate => ["server", "client"], :default => "client"
 
+  declare_workers_not_supported!
+
   class Client
     public
     def initialize(socket, logger)
@@ -61,9 +63,10 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def register
     require "socket"
     require "stud/try"
-    if server?
-      workers_not_supported
 
+    workers_not_supported
+
+    if server?
       @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
       @server_socket = TCPServer.new(@host, @port)
       @client_threads = []
