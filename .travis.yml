@@ -7,4 +7,4 @@ rvm:
 script:
 - bundle exec rspec spec
 jdk: oraclejdk8
-before_install: []
+script: bundle exec rspec spec && bundle exec rspec spec --tag integration
