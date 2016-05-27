@@ -22,21 +22,13 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # When mode is `server`, the port to listen on.
   # When mode is `client`, the port to connect to.
   config :port, :validate => :number, :required => true
-  
+
   # When connect failed,retry interval in sec.
   config :reconnect_interval, :validate => :number, :default => 10
 
   # Mode to operate in. `server` listens for client connections,
   # `client` connects to a server.
   config :mode, :validate => ["server", "client"], :default => "client"
-
-  # The format to use when writing events to the file. This value
-  # supports any string and can include `%{name}` and other dynamic
-  # strings.
-  #
-  # If this setting is omitted, the full json representation of the
-  # event will be written as a single line.
-  config :message_format, :validate => :string, :deprecated => true
 
   class Client
     public
@@ -132,14 +124,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   public
   def receive(event)
-    
-
-    #if @message_format
-      #output = event.sprintf(@message_format) + "\n"
-    #else
-      #output = event.to_hash.to_json + "\n"
-    #end
-    
     @codec.encode(event)
   end # def receive
 end # class LogStash::Outputs::Tcp
