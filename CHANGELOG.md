@@ -1,4 +1,4 @@
-## 4.0.0
+## 3.1.0
   - breaking,config: Remove deprecated config `message_format`
 
 ## 3.0.1
