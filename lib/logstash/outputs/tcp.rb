@@ -17,7 +17,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   # When mode is `server`, the address to listen on.
   # When mode is `client`, the address to connect to.
-  config :host, :validate => :string, :required => true
+  config :host, :validate => :array, :required => true
 
   # When mode is `server`, the port to listen on.
   # When mode is `client`, the port to connect to.
@@ -63,7 +63,8 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     require "stud/try"
     if server?
       workers_not_supported
-
+      raise LogStash::ConfigurationError, "You cannot pass an array of hosts in server mode" if @host.is_a? Array and @host.count > 1
+      @host = @host.first
       @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
       @server_socket = TCPServer.new(@host, @port)
       @client_threads = []
@@ -113,8 +114,17 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   private
   def connect
     Stud::try do
-      return TCPSocket.new(@host, @port)
+      @host.each do |shost|
+        begin
+          return TCPSocket.new(shost, @port)
+        rescue => e
+            @logger.warn("Connection failed", :host => @host, :port => @port,
+                         :exception => e, :backtrace => e.backtrace)
+        end
+      end
     end
+    @logger.error("All hosts unavailable", :hosts => @host, :port => @port)
+    raise StandardError, "Cannot connect - All hosts unavailable"
   end # def connect
 
   private
