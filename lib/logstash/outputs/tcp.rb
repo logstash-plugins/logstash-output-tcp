@@ -13,6 +13,7 @@ require "logstash/util/socket_peer"
 class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   config_name "tcp"
+  concurrency :single
 
   default :codec, "json"
 
@@ -115,8 +116,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     end # @ssl_enable
 
     if server?
-      workers_not_supported
-
       @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
       begin
         @server_socket = TCPServer.new(@host, @port)
