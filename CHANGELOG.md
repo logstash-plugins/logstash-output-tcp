@@ -1,5 +1,6 @@
-## 3.2.0
- - Added SSL support to this plugin (@michaelweiser)
+## 4.0.0
+ - Remove deprecated `workers_not_supported` call
+ - Use concurrency :single
 
 ## 3.1.1
   - Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
