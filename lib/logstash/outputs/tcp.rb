@@ -51,6 +51,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # SSL key passphrase
   config :ssl_key_passphrase, :validate => :password, :default => nil
 
+  # fields to write
+  config :fields, :validate => :array, :default => []
+
   # The format to use when writing events to the file. This value
   # supports any string and can include `%{name}` and other dynamic
   # strings.
@@ -202,8 +205,18 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     @mode == "server"
   end # def server?
 
+  private
+  def filter(original_event)
+    filtered_event = LogStash::Event.new
+    @fields.map{|field| filtered_event.set(field, original_event.get(field))}
+    return filtered_event
+  end
+
   public
   def receive(event)
+    if @fields.any?
+      event = filter(event)
+    end
     @codec.encode(event)
   end # def receive
 end # class LogStash::Outputs::Tcp
