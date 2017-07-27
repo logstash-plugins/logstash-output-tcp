@@ -1,3 +1,6 @@
+## 5.0.0
+ - Breaking: mark deprecated option `message_format` as obsolete
+
 ## 4.0.0
  - Remove deprecated `workers_not_supported` call
  - Use concurrency :single

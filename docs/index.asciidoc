@@ -62,20 +62,6 @@ output plugins.
 When mode is `server`, the address to listen on.
 When mode is `client`, the address to connect to.
 
-[id="plugins-{type}s-{plugin}-message_format"]
-===== `message_format`  (DEPRECATED)
-
-  * DEPRECATED WARNING: This configuration item is deprecated and may not be available in future versions.
-  * Value type is <<string,string>>
-  * There is no default value for this setting.
-
-The format to use when writing events to the file. This value
-supports any string and can include `%{name}` and other dynamic
-strings.
-
-If this setting is omitted, the full json representation of the
-event will be written as a single line.
-
 [id="plugins-{type}s-{plugin}-mode"]
 ===== `mode` 
 
