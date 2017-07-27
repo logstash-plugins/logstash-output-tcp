@@ -51,13 +51,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # SSL key passphrase
   config :ssl_key_passphrase, :validate => :password, :default => nil
 
-  # The format to use when writing events to the file. This value
-  # supports any string and can include `%{name}` and other dynamic
-  # strings.
-  #
-  # If this setting is omitted, the full json representation of the
-  # event will be written as a single line.
-  config :message_format, :validate => :string, :deprecated => true
+  config :message_format, :validate => :string, :obsolete => "This setting is obsolete. The event will be formatted according to the codec used"
 
   class Client
     public
