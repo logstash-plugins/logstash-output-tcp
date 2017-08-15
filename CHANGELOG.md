@@ -1,3 +1,6 @@
+## 5.0.1
+  - Fix some documentation issues
+
 ## 5.0.0
  - Breaking: mark deprecated option `message_format` as obsolete
 
