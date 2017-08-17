@@ -1,3 +1,6 @@
+## 4.0.2
+ - Docs fixes
+
 ## 4.0.0
  - Remove deprecated `workers_not_supported` call
  - Use concurrency :single
