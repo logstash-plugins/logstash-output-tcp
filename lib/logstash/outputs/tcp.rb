@@ -42,6 +42,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # The SSL CA certificate, chainfile or CA path. The system CA path is automatically included.
   config :ssl_cacert, :validate => :path
 
+  # Do not perform TLS Mutal Authentication, only require a certificate for the client (only with :mode=>"client")
+  config :ssl_mutual, :validate => :boolean, :default => true
+
   # SSL certificate path
   config :ssl_cert, :validate => :path
 
@@ -85,8 +88,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     require "openssl"
 
     @ssl_context = OpenSSL::SSL::SSLContext.new
-    @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
-    @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
+    
+    if @ssl_mutual
+      @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
+      @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
+    end
     if @ssl_verify
       @cert_store = OpenSSL::X509::Store.new
       # Load the system default certificate path to the store
@@ -97,7 +103,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         @cert_store.add_file(@ssl_cacert)
       end
       @ssl_context.cert_store = @cert_store
-      @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+      if @ssl_mutual
+        @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+      else
+				@ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER
+      end
     end
   end # def setup_ssl
 
