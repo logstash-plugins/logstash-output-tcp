@@ -1,3 +1,6 @@
+## 5.0.4
+  - Removed requirement to have a certificate/key pair when enabling ssl
+
 ## 5.0.3
   - Docs: Set the default_codec doc attribute.
 

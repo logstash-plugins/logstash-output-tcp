@@ -85,8 +85,12 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     require "openssl"
 
     @ssl_context = OpenSSL::SSL::SSLContext.new
-    @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
-    @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
+    if @ssl_cert
+      @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
+      if @ssl_key
+        @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
+      end
+    end
     if @ssl_verify
       @cert_store = OpenSSL::X509::Store.new
       # Load the system default certificate path to the store
