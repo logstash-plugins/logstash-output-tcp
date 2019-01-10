@@ -1,3 +1,6 @@
+## 6.0.0
+  - Removed obsolete field `message_format`
+
 ## 5.0.4
   - Removed requirement to have a certificate/key pair when enabling ssl
 

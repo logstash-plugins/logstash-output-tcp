@@ -51,8 +51,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # SSL key passphrase
   config :ssl_key_passphrase, :validate => :password, :default => nil
 
-  config :message_format, :validate => :string, :obsolete => "This setting is obsolete. The event will be formatted according to the codec used"
-
   class Client
     public
     def initialize(socket, logger)
