@@ -165,7 +165,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           client_socket.close rescue nil
           client_socket = nil
           sleep @reconnect_interval
-          retry
+          raise
         end
       end
     end
