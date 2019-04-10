@@ -177,7 +177,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       client_socket = TCPSocket.new(@host, @port)
       if @ssl_enable
         client_socket = OpenSSL::SSL::SSLSocket.new(client_socket, @ssl_context)
-        client_socket.sync_close = true
         begin
           client_socket.connect
         rescue OpenSSL::SSL::SSLError => ssle
