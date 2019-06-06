@@ -1,3 +1,6 @@
+## 6.0.1
+  - Use sync socket write to ensure that full message is written to socket.
+  
 ## 6.0.0
   - Removed obsolete field `message_format`
 
