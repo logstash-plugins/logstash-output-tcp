@@ -10,7 +10,7 @@ describe LogStash::Outputs::Tcp do
   } }
 
   context "when enabling SSL" do
-    let(:config) { super.merge("ssl_enable" => true) }
+    let(:config) { super().merge("ssl_enable" => true) }
     context "and not providing a certificate/key pair" do
       it "registers without error" do
         expect { subject.register }.to_not raise_error
@@ -24,7 +24,7 @@ describe LogStash::Outputs::Tcp do
         IO.write(path, certificate.to_s)
         path
       end
-      let(:config) { super.merge("ssl_cert" => true, "ssl_cert" => cert_file) }
+      let(:config) { super().merge("ssl_cert" => true, "ssl_cert" => cert_file) }
       it "registers without error" do
         expect { subject.register }.to_not raise_error
       end
