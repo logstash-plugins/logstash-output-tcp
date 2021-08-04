@@ -158,7 +158,12 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           client_socket.sysread(16384) if r.any?
 
           # Now send the payload
-          client_socket.syswrite(payload) if w.any?
+          if w.any?
+            while payload.bytesize > 0
+              written = client_socket.syswrite(payload)
+              payload = payload.byteslice(written..-1)
+            end
+          end
         rescue => e
           @logger.warn("tcp output exception", :host => @host, :port => @port,
                        :exception => e, :backtrace => e.backtrace)
