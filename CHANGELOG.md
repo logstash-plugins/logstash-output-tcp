@@ -1,5 +1,5 @@
 ## 6.0.1
-  - Fixed logging fail retry to stdout
+  - Fixed logging fail retry to stdout [#43](https://github.com/logstash-plugins/logstash-output-tcp/pull/43)
   - Fixed to use `reconnect_interval` when establish a connection
 
 ## 6.0.0
