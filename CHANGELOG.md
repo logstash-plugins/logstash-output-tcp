@@ -1,3 +1,7 @@
+## 6.0.1
+  - Fixed logging fail retry to stdout
+  - Fixed to use `reconnect_interval` when establish a connection
+
 ## 6.0.0
   - Removed obsolete field `message_format`
 
