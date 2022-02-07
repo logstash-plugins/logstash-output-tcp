@@ -173,15 +173,14 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   private
   def connect
-    Stud::try do
+    begin
       client_socket = TCPSocket.new(@host, @port)
       if @ssl_enable
         client_socket = OpenSSL::SSL::SSLSocket.new(client_socket, @ssl_context)
         begin
           client_socket.connect
         rescue OpenSSL::SSL::SSLError => ssle
-          @logger.error("SSL Error", :exception => ssle,
-                        :backtrace => ssle.backtrace)
+          @logger.error("SSL Error", :exception => ssle, :backtrace => ssle.backtrace)
           # NOTE(mrichar1): Hack to prevent hammering peer
           sleep(5)
           raise
@@ -190,6 +189,10 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
       @logger.debug("Opened connection", :client => "#{client_socket.peer}")
       return client_socket
+    rescue StandardError => e
+      @logger.error("Failed to connect: #{e.message}", :exception => e.class, :backtrace => e.backtrace)
+      sleep @reconnect_interval
+      retry
     end
   end # def connect
 
