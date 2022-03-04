@@ -152,15 +152,19 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         begin
           client_socket = connect unless client_socket
           r,w,e = IO.select([client_socket], [client_socket], [client_socket], nil)
-          # don't expect any reads, but a readable socket might
-          # mean the remote end closed, so read it and throw it away.
-          # we'll get an EOFError if it happens.
-          client_socket.sysread(16384) if r.any?
+          # Read everything first
+          while r.any? do
+            # don't expect any reads, but a readable socket might
+            # mean the remote end closed, so read it and throw it away.
+            # we'll get an EOFError if it happens.
+            client_socket.sysread(16384)
+            r = IO.select([client_socket])
+          end
 
           # Now send the payload
           client_socket.syswrite(payload) if w.any?
         rescue => e
-          @logger.warn("tcp output exception", :host => @host, :port => @port,
+          @logger.warn("tcp output exception, will retry", :host => @host, :port => @port,
                        :exception => e, :backtrace => e.backtrace)
           client_socket.close rescue nil
           client_socket = nil
