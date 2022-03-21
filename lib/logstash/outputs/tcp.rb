@@ -86,7 +86,10 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     if @ssl_cert
       @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
       if @ssl_key
-        @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key),@ssl_key_passphrase)
+        # if we have an encrypted key and a password is not provided (nil) than OpenSSL::PKey::RSA
+        # prompts the user to enter a password interactively - we do not want to do that,
+        # for plain-text keys the default '' password argument gets simply ignored
+        @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key), @ssl_key_passphrase.value || '')
       end
     end
     if @ssl_verify
