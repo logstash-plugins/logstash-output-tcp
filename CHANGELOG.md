@@ -1,3 +1,6 @@
+## 6.0.2
+  - Fix: unable to start with password protected key [#45](https://github.com/logstash-plugins/logstash-output-tcp/pull/45)
+
 ## 6.0.1
   - Fixed logging fail retry to stdout [#43](https://github.com/logstash-plugins/logstash-output-tcp/pull/43)
   - Fixed to use `reconnect_interval` when establish a connection
