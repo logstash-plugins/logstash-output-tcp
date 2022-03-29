@@ -4,10 +4,60 @@ require "flores/pki"
 
 describe LogStash::Outputs::Tcp do
   subject { described_class.new(config) }
-  let(:config) { {
-    "host" => "localhost",
-    "port" => 2000 + rand(3000),
-  } }
+
+  let(:port) do
+    begin
+      # Start high to better avoid common services
+      port = rand(10000..65535)
+      s = TCPServer.new("127.0.0.1", port)
+      s.close
+
+      port
+    rescue Errno::EADDRINUSE
+      retry
+    end
+  end
+
+  let(:config) { { "host" => "localhost", "port" => port } }
+
+  let(:event) { LogStash::Event.new('message' => 'foo bar') }
+
+  context 'failing to connect' do
+
+    before { subject.register }
+
+    let(:config) { super().merge 'port' => 1000 }
+
+    it 'fails to connect' do
+      expect( subject ).to receive(:log_error).and_call_original
+      Thread.start { subject.receive(event) }
+      sleep 1.0
+    end
+
+  end
+
+  context 'server mode' do
+
+    before { subject.register }
+
+    let(:config) { super().merge 'mode' => 'server' }
+
+    let(:client) do
+      Stud::try(3.times) { TCPSocket.new("127.0.0.1", port) }
+    end
+
+    after { client.close }
+
+    it 'receives serialized data' do
+      client # connect
+      Thread.start { sleep 0.5; subject.receive event }
+
+      read = client.recv(1000)
+      expect( read.size ).to be > 0
+      expect( JSON.parse(read)['message'] ).to eql 'foo bar'
+    end
+
+  end
 
   context "when enabling SSL" do
     let(:config) { super().merge("ssl_enable" => true) }
