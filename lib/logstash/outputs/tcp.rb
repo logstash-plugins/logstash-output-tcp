@@ -65,8 +65,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         begin
           @socket.write(@queue.pop)
         rescue => e
-          @logger.warn("tcp output exception", :socket => @socket,
-                       :exception => e)
+          log_warn 'socket write failed:', e, socket: (@socket ? @socket.to_s : nil)
           break
         end
       end
@@ -119,8 +118,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       begin
         @server_socket = TCPServer.new(@host, @port)
       rescue Errno::EADDRINUSE
-        @logger.error("Could not start TCP server: Address in use",
-                      :host => @host, :port => @port)
+        @logger.error("Could not start tcp server: Address in use", host: @host, port: @port)
         raise
       end
       if @ssl_enable
@@ -133,8 +131,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           Thread.start(server_socket.accept) do |client_socket|
             # monkeypatch a 'peer' method onto the socket.
             client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
-            @logger.debug("Accepted connection", :client => client_socket.peer,
-                          :server => "#{@host}:#{@port}")
+            @logger.debug("accepted connection", client: client_socket.peer, server: "#{@host}:#{@port}")
             client = Client.new(client_socket, @logger)
             Thread.current[:client] = client
             @client_threads << Thread.current
@@ -163,8 +160,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           # Now send the payload
           client_socket.syswrite(payload) if w.any?
         rescue => e
-          @logger.warn("tcp output exception", :host => @host, :port => @port,
-                       :exception => e, :backtrace => e.backtrace)
+          log_warn "client socket failed:", e, host: @host, port: @port, socket: (client_socket ? client_socket.to_s : nil)
           client_socket.close rescue nil
           client_socket = nil
           sleep @reconnect_interval
@@ -183,17 +179,17 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         begin
           client_socket.connect
         rescue OpenSSL::SSL::SSLError => ssle
-          @logger.error("SSL Error", :exception => ssle, :backtrace => ssle.backtrace)
+          log_error 'connect ssl failure:', ssle, backtrace: true
           # NOTE(mrichar1): Hack to prevent hammering peer
           sleep(5)
           raise
         end
       end
       client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
-      @logger.debug("Opened connection", :client => "#{client_socket.peer}")
+      @logger.debug("opened connection", :client => client_socket.peer)
       return client_socket
-    rescue StandardError => e
-      @logger.error("Failed to connect: #{e.message}", :exception => e.class, :backtrace => e.backtrace)
+    rescue => e
+      log_error 'failed to connect:', e
       sleep @reconnect_interval
       retry
     end
@@ -208,4 +204,23 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def receive(event)
     @codec.encode(event)
   end # def receive
+
+  private
+
+  def log_warn(msg, e, details = {})
+    details = details.merge message: e.message, exception: e.class
+    if details[:backtrace] || (details[:backtrace].nil? && @logger.debug?)
+      details[:backtrace] = e.backtrace
+    end
+    @logger.warn(msg, details)
+  end
+
+  def log_error(msg, e, backtrace: nil)
+    details = { message: e.message, exception: e.class }
+    if backtrace || (backtrace.nil? && @logger.debug?)
+      details[:backtrace] = e.backtrace
+    end
+    @logger.error(msg, details)
+  end
+
 end # class LogStash::Outputs::Tcp
