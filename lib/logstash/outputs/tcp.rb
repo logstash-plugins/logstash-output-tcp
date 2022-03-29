@@ -52,14 +52,13 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   config :ssl_key_passphrase, :validate => :password, :default => nil
 
   class Client
-    public
+
     def initialize(socket, logger)
       @socket = socket
       @logger = logger
       @queue  = Queue.new
     end
 
-    public
     def run
       loop do
         begin
@@ -71,13 +70,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       end
     end # def run
 
-    public
     def write(msg)
       @queue.push(msg)
     end # def write
   end # class Client
 
-  private
   def setup_ssl
     require "openssl"
 
@@ -104,8 +101,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
     end
   end # def setup_ssl
+  private :setup_ssl
 
-  public
+  # @overload Base#register
   def register
     require "socket"
     require "stud/try"
@@ -168,9 +166,15 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         end
       end
     end
-  end # def register
+  end
+
+  # @overload Base#receive
+  def receive(event)
+    @codec.encode(event)
+  end
 
   private
+
   def connect
     begin
       client_socket = TCPSocket.new(@host, @port)
@@ -195,17 +199,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     end
   end # def connect
 
-  private
   def server?
     @mode == "server"
   end # def server?
-
-  public
-  def receive(event)
-    @codec.encode(event)
-  end # def receive
-
-  private
 
   def log_warn(msg, e, details = {})
     details = details.merge message: e.message, exception: e.class
