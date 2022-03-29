@@ -73,6 +73,14 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     def write(msg)
       @queue.push(msg)
     end # def write
+
+    def close
+      begin
+        @socket.close
+      rescue => e
+        log_warn 'socket close failed:', e, socket: (@socket ? @socket.to_s : nil)
+      end
+    end
   end # class Client
 
   def setup_ssl
@@ -171,6 +179,16 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # @overload Base#receive
   def receive(event)
     @codec.encode(event)
+  end
+
+  # @overload Base#close
+  def close
+    return unless @client_threads
+
+    @client_threads.each do |thread|
+      client = thread[:client]
+      client.close if client
+    end
   end
 
   private
