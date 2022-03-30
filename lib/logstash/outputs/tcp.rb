@@ -216,7 +216,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         begin
           client_socket.connect
         rescue OpenSSL::SSL::SSLError => ssle
-          log_error 'connect ssl failure:', ssle, backtrace: true
+          log_error 'connect ssl failure:', ssle, backtrace: false
           # NOTE(mrichar1): Hack to prevent hammering peer
           sleep(5)
           raise
@@ -246,7 +246,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   def log_error(msg, e, backtrace: nil)
     details = { message: e.message, exception: e.class }
-    if backtrace || (backtrace.nil? && @logger.debug?)
+    if backtrace || (backtrace.nil? && @logger.info?)
       details[:backtrace] = e.backtrace
     end
     @logger.error(msg, details)
