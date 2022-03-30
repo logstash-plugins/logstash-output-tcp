@@ -50,7 +50,7 @@ describe LogStash::Outputs::Tcp do
 
     after { subject.close }
 
-    it 'receives serialized data' do
+    it 'receives serialized data' do; require 'json'
       client # connect
       Thread.start { sleep 0.5; subject.receive event }
 
