@@ -61,6 +61,40 @@ describe LogStash::Outputs::Tcp do
 
   end
 
+  context "with forced protocol" do
+    let(:config) do
+      super().merge 'ssl_supported_protocols' => [ 'TLSv1.1' ]
+    end
+
+    before do
+      ssl_context = OpenSSL::SSL::SSLContext.new
+      allow(subject).to receive(:new_ssl_context).and_return(ssl_context)
+      expect(ssl_context).to receive(:min_version=).with(:'TLS1_1').and_call_original
+      expect(ssl_context).to receive(:max_version=).with(:'TLS1_1').and_call_original
+    end
+
+    it "sets min/max version" do
+      subject.send :setup_ssl
+    end
+  end
+
+  context "with protocol range" do
+    let(:config) do
+      super().merge 'ssl_supported_protocols' => [ 'TLSv1.3', 'TLSv1.1', 'TLSv1.2' ]
+    end
+
+    before do
+      ssl_context = OpenSSL::SSL::SSLContext.new
+      allow(subject).to receive(:new_ssl_context).and_return(ssl_context)
+      expect(ssl_context).to receive(:min_version=).with(:'TLS1_1').and_call_original
+      expect(ssl_context).to receive(:max_version=).with(:'TLS1_3').and_call_original
+    end
+
+    it "sets min/max version" do
+      subject.send :setup_ssl
+    end
+  end
+
   context "when enabling SSL" do
     let(:config) { super().merge("ssl_enable" => true, 'codec' => 'plain') }
     context "and not providing a certificate/key pair" do
