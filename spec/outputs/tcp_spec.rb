@@ -111,10 +111,12 @@ describe LogStash::Outputs::Tcp do
         ssl_context.key = OpenSSL::PKey::RSA.new(File.read(key_file), nil)
         ssl_context.ssl_version = server_ssl_version if server_ssl_version
         ssl_context.min_version = server_min_version if server_min_version
+        ssl_context.max_version = server_max_version if server_max_version
         OpenSSL::SSL::SSLServer.new(server, ssl_context)
       end
 
       let(:server_min_version) { nil }
+      let(:server_max_version) { nil }
       let(:server_ssl_version) { nil }
 
       context 'with supported protocol' do
