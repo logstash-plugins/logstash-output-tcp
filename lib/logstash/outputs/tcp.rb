@@ -51,6 +51,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # SSL key passphrase
   config :ssl_key_passphrase, :validate => :password, :default => nil
 
+  # NOTE: the default setting [] uses SSL engine defaults
+  config :ssl_supported_protocols, :validate => ['TLSv1.1', 'TLSv1.2', 'TLSv1.3'], :default => [], :list => true
+
   class Client
 
     def initialize(socket, logger)
@@ -86,7 +89,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def setup_ssl
     require "openssl"
 
-    @ssl_context = OpenSSL::SSL::SSLContext.new
+    @ssl_context = new_ssl_context
     if @ssl_cert
       @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
       if @ssl_key
@@ -108,8 +111,20 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @ssl_context.cert_store = @cert_store
       @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
     end
+
+    if ssl_supported_protocols.any?
+      min_max_version = ssl_supported_protocols.sort.map { |n| n.sub('v', '').sub('.', '_').to_sym } # 'TLSv1.2' => :TLS1_2
+      @ssl_context.min_version = min_max_version.first
+      @ssl_context.max_version = min_max_version.last
+    end
   end # def setup_ssl
   private :setup_ssl
+
+  # @note to be able to hook up into #ssl_context from tests
+  def new_ssl_context
+    OpenSSL::SSL::SSLContext.new
+  end
+  private :new_ssl_context
 
   # @overload Base#register
   def register
