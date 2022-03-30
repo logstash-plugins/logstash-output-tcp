@@ -191,7 +191,7 @@ describe LogStash::Outputs::Tcp do
           expect { subject.receive event }.to throw_symbol(:TEST_DONE)
         end
 
-      end
+      end if LOGSTASH_VERSION > '7.0'
 
     end
 
