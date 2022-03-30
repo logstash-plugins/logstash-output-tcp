@@ -25,7 +25,17 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'logstash-codec-json'
   s.add_runtime_dependency 'stud'
 
+  # NOTE: be able to test against LS 7.x / 8.x
+  # (some LS versions have strict jruby-openssl requirements in logstash-core e.g. "= 0.11.0")
+  if ENV['ELASTIC_CONTAINER'].eql?('true') && ENV['PWD'].eql?('/usr/share/plugins/plugin')
+    # detected running under CI - ENV['CI'] is not enough e.g. during `docker-compose build`
+  else
+    # we depend on bouncycastle's bcpkix-jdk15on being on the class-path
+    s.add_runtime_dependency 'jruby-openssl', '>= 0.12.2' # 0.12 supports TLSv1.3
+  end
+
   s.add_development_dependency 'logstash-devutils'
+  s.add_development_dependency 'logstash-codec-plain'
   s.add_development_dependency 'flores'
 end
 
