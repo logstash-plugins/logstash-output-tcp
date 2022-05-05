@@ -134,6 +134,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def register
     require "socket"
     require "stud/try"
+    @closed = Concurrent::AtomicBoolean.new(false)
     setup_ssl if @ssl_enable
 
     if server?
@@ -147,10 +148,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       if @ssl_enable
         @server_socket = OpenSSL::SSL::SSLServer.new(@server_socket, @ssl_context)
       end # @ssl_enable
-      @client_threads = []
+      @client_threads = Concurrent::Array.new
 
       @accept_thread = Thread.new(@server_socket) do |server_socket|
         loop do
+          break if @closed.value
           Thread.start(server_socket.accept) do |client_socket|
             # monkeypatch a 'peer' method onto the socket.
             client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
@@ -158,16 +160,15 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
             client = Client.new(client_socket, @logger)
             Thread.current[:client] = client
             @client_threads << Thread.current
-            client.run
+            client.run unless @closed.value
           end
         end
       end
 
       @codec.on_event do |event, payload|
-        @client_threads.each do |client_thread|
+        @client_threads.select(&:alive?).each do |client_thread|
           client_thread[:client].write(payload)
         end
-        @client_threads.reject! {|t| !t.alive? }
       end
     else
       client_socket = nil
@@ -200,6 +201,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   # @overload Base#close
   def close
+    @closed.make_true
     @server_socket.close rescue nil if @server_socket
 
     return unless @client_threads
