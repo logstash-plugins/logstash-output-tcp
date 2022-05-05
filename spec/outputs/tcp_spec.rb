@@ -91,15 +91,15 @@ describe LogStash::Outputs::Tcp do
     it "does not limit protocol selection (except min_version)" do
       ssl_context = OpenSSL::SSL::SSLContext.new
       allow(subject).to receive(:new_ssl_context).and_return(ssl_context)
-      expect(ssl_context).to receive(:min_version=).with(:'TLS1_1').and_call_original
+      expect(ssl_context).to receive(:min_version=).with(:'TLS1_1').at_least(1).and_call_original
 
       if OpenSSL::SSL.const_defined? :OP_NO_TLSv1_3
-        ssl_context = subject.send :setup_ssl
+        subject.send :setup_ssl
         expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_3).to eql 0
         expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_2).to eql 0
         expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_1).to eql 0
       else
-        ssl_context = subject.send :setup_ssl
+        subject.send :setup_ssl
         expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_2).to eql 0
         expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_1).to eql 0
       end
