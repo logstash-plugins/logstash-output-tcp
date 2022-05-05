@@ -200,11 +200,12 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   # @overload Base#close
   def close
-    return unless @client_threads
+    @server_socket.close rescue nil if @server_socket
 
+    return unless @client_threads
     @client_threads.each do |thread|
       client = thread[:client]
-      client.close if client
+      client.close rescue nil if client
     end
   end
 
