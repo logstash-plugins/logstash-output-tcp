@@ -151,6 +151,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @client_threads = Concurrent::Array.new
 
       @accept_thread = Thread.new(@server_socket) do |server_socket|
+        LogStash::Util.set_thread_name("[#{id}]|output|tcp|server_accept")
         loop do
           break if @closed.value
           client_socket = server_socket.accept_nonblock exception: false
@@ -164,6 +165,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
             @logger.debug("accepted connection", client: client_socket.peer, server: "#{@host}:#{@port}")
             client = Client.new(client_socket, @logger)
             Thread.current[:client] = client
+            LogStash::Util.set_thread_name("[#{id}]|output|tcp|client_socket-#{@client_threads.size}")
             @client_threads << Thread.current
             client.run unless @closed.value
           end
