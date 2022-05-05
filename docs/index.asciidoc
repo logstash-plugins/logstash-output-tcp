@@ -140,7 +140,6 @@ SSL key passphrase
     `'TLSv1.1'` is not considered secure and is only provided for legacy applications.
 
 List of allowed SSL/TLS versions to use when establishing a secure connection.
-The plugin has a limitation and can only enable a range of protocols, e.g. setting `['TLSv1.3', 'TLSv1.1']` does not disable `TLSv1.2`.
 
 NOTE: If you configure the plugin to use `'TLSv1.1'` on any recent JVM, such as the one packaged with Logstash,
 the protocol is disabled by default and needs to be enabled manually by changing `jdk.tls.disabledAlgorithms` in

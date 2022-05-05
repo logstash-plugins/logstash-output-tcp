@@ -66,15 +66,20 @@ describe LogStash::Outputs::Tcp do
       super().merge 'ssl_supported_protocols' => [ 'TLSv1.1' ]
     end
 
-    before do
-      ssl_context = OpenSSL::SSL::SSLContext.new
-      allow(subject).to receive(:new_ssl_context).and_return(ssl_context)
-      expect(ssl_context).to receive(:min_version=).with(:'TLS1_1').and_call_original
-      expect(ssl_context).to receive(:max_version=).with(:'TLS1_1').and_call_original
-    end
-
-    it "sets min/max version" do
-      subject.send :setup_ssl
+    it "limits protocol selection" do
+      if OpenSSL::SSL.const_defined? :OP_NO_TLSv1_3
+        ssl_context = subject.send :setup_ssl
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_3).to_not eql 0
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_2).to_not eql 0
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_1).to eql 0
+      else
+        ssl_context = OpenSSL::SSL::SSLContext.new
+        allow(subject).to receive(:new_ssl_context).and_return(ssl_context)
+        expect(ssl_context).to receive(:max_version=).with(:'TLS1_2').and_call_original
+        ssl_context = subject.send :setup_ssl
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_2).to_not eql 0
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_1).to eql 0
+      end
     end
   end
 
@@ -83,14 +88,22 @@ describe LogStash::Outputs::Tcp do
       super().merge 'ssl_supported_protocols' => [ 'TLSv1.3', 'TLSv1.1', 'TLSv1.2' ]
     end
 
-    before do
+    it "does not limit protocol selection (except min_version)" do
       ssl_context = OpenSSL::SSL::SSLContext.new
       allow(subject).to receive(:new_ssl_context).and_return(ssl_context)
       expect(ssl_context).to receive(:min_version=).with(:'TLS1_1').and_call_original
-      expect(ssl_context).to receive(:max_version=).with(:'TLS1_3').and_call_original
-    end
 
-    it "sets min/max version" do
+      if OpenSSL::SSL.const_defined? :OP_NO_TLSv1_3
+        ssl_context = subject.send :setup_ssl
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_3).to eql 0
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_2).to eql 0
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_1).to eql 0
+      else
+        ssl_context = subject.send :setup_ssl
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_2).to eql 0
+        expect(ssl_context.options & OpenSSL::SSL::OP_NO_TLSv1_1).to eql 0
+      end
+
       subject.send :setup_ssl
     end
   end

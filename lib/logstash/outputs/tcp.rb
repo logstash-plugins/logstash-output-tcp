@@ -110,12 +110,18 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
     end
 
+    @ssl_context.min_version = :TLS1_1 # not strictly required - JVM should have disabled TLSv1
     if ssl_supported_protocols.any?
-      min_max_version = ssl_supported_protocols.sort.map { |n| n.sub('v', '').sub('.', '_').to_sym } # 'TLSv1.2' => :TLS1_2
-      @ssl_context.min_version = min_max_version.first
-      @ssl_context.max_version = min_max_version.last
+      disabled_protocols = ['TLSv1.1', 'TLSv1.2', 'TLSv1.3'] - ssl_supported_protocols
+      unless OpenSSL::SSL.const_defined? :OP_NO_TLSv1_3 # work-around JRuby-OpenSSL bug - missing constant
+        @ssl_context.max_version = :TLS1_2 if disabled_protocols.delete('TLSv1.3')
+      end
+      # mapping 'TLSv1.2' -> OpenSSL::SSL::OP_NO_TLSv1_2
+      disabled_protocols.map! { |v| OpenSSL::SSL.const_get "OP_NO_#{v.sub('.', '_')}" }
+      @ssl_context.options = disabled_protocols.inject(@ssl_context.options) { |options, op_no| options | op_no }
     end
-  end # def setup_ssl
+    @ssl_context
+  end
   private :setup_ssl
 
   # @note to be able to hook up into #ssl_context from tests
@@ -128,9 +134,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def register
     require "socket"
     require "stud/try"
-    if @ssl_enable
-      setup_ssl
-    end # @ssl_enable
+    setup_ssl if @ssl_enable
 
     if server?
       @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
