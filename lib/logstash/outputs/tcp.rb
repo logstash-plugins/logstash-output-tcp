@@ -239,19 +239,15 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     @mode == "server"
   end # def server?
 
-  def log_warn(msg, e, details = {})
+  def log_warn(msg, e, backtrace: @logger.debug?, **details)
     details = details.merge message: e.message, exception: e.class
-    if details[:backtrace] || (details[:backtrace].nil? && @logger.debug?)
-      details[:backtrace] = e.backtrace
-    end
+    details[:backtrace] = e.backtrace if backtrace
     @logger.warn(msg, details)
   end
 
-  def log_error(msg, e, backtrace: nil)
-    details = { message: e.message, exception: e.class }
-    if backtrace || (backtrace.nil? && @logger.info?)
-      details[:backtrace] = e.backtrace
-    end
+  def log_error(msg, e, backtrace: @logger.info?, **details)
+    details = details.merge message: e.message, exception: e.class
+    details[:backtrace] = e.backtrace if backtrace
     @logger.error(msg, details)
   end
 
