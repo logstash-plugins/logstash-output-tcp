@@ -153,7 +153,12 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @accept_thread = Thread.new(@server_socket) do |server_socket|
         loop do
           break if @closed.value
-          Thread.start(server_socket.accept) do |client_socket|
+          client_socket = server_socket.accept_nonblock exception: false
+          if client_socket == :wait_readable
+            IO.select [ server_socket ]
+            next
+          end
+          Thread.start(client_socket) do |client_socket|
             # monkeypatch a 'peer' method onto the socket.
             client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
             @logger.debug("accepted connection", client: client_socket.peer, server: "#{@host}:#{@port}")
