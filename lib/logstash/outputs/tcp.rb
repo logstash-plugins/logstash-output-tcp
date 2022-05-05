@@ -78,11 +78,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     end # def write
 
     def close
-      begin
-        @socket.close
-      rescue => e
-        log_warn 'socket close failed:', e, socket: (@socket ? @socket.to_s : nil)
-      end
+      @socket.close
+    rescue => e
+      log_warn 'socket close failed:', e, socket: (@socket ? @socket.to_s : nil)
     end
   end # class Client
 
