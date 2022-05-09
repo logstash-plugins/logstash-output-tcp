@@ -173,7 +173,8 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       end
 
       @codec.on_event do |event, payload|
-        @client_threads.select(&:alive?).each do |client_thread|
+        @client_threads.select!(&:alive?)
+        @client_threads.each do |client_thread|
           client_thread[:client].write(payload)
         end
       end
