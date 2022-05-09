@@ -118,7 +118,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       end
       # mapping 'TLSv1.2' -> OpenSSL::SSL::OP_NO_TLSv1_2
       disabled_protocols.map! { |v| OpenSSL::SSL.const_get "OP_NO_#{v.sub('.', '_')}" }
-      @ssl_context.options = disabled_protocols.inject(@ssl_context.options) { |options, op_no| options | op_no }
+      @ssl_context.options = disabled_protocols.reduce(@ssl_context.options, :|)
     end
     @ssl_context
   end
