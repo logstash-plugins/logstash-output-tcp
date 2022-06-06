@@ -1,3 +1,7 @@
+## 6.1.0
+  - Feat: ssl_supported_protocols (TLSv1.3) [#47](https://github.com/logstash-plugins/logstash-output-tcp/pull/47)
+  - Fix: close server and client sockets on plugin close
+
 ## 6.0.2
   - Fix: unable to start with password protected key [#45](https://github.com/logstash-plugins/logstash-output-tcp/pull/45)
 
