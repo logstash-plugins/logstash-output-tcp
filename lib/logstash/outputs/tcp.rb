@@ -190,7 +190,10 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           client_socket.sysread(16384) if r.any?
 
           # Now send the payload
-          client_socket.syswrite(payload) if w.any?
+          written = client_socket.syswrite(payload) if w.any?
+          while payload.length > written do
+            written += client_socket.syswrite(payload) if w.any?
+          end
         rescue => e
           log_warn "client socket failed:", e, host: @host, port: @port, socket: (client_socket ? client_socket.to_s : nil)
           client_socket.close rescue nil
