@@ -137,67 +137,81 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     @closed = Concurrent::AtomicBoolean.new(false)
     setup_ssl if @ssl_enable
 
-    if server?
-      @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
+    run_as_server if server?
+    run_as_client unless server?
+  end
+
+  def run_as_server
+    @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
+    begin
+      @server_socket = TCPServer.new(@host, @port)
+    rescue Errno::EADDRINUSE
+      @logger.error("Could not start tcp server: Address in use", host: @host, port: @port)
+      raise
+    end
+    if @ssl_enable
+      @server_socket = OpenSSL::SSL::SSLServer.new(@server_socket, @ssl_context)
+    end # @ssl_enable
+    @client_threads = Concurrent::Array.new
+
+    @accept_thread = Thread.new(@server_socket) do |server_socket|
+      LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|server_accept")
+      loop do
+        break if @closed.value
+        client_socket = server_socket.accept_nonblock exception: false
+        if client_socket == :wait_readable
+          IO.select [ server_socket ]
+          next
+        end
+        Thread.start(client_socket) do |client_socket|
+          # monkeypatch a 'peer' method onto the socket.
+          client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
+          @logger.debug("accepted connection", client: client_socket.peer, server: "#{@host}:#{@port}")
+          client = Client.new(client_socket, @logger)
+          Thread.current[:client] = client
+          LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|client_socket-#{@client_threads.size}")
+          @client_threads << Thread.current
+          client.run unless @closed.value
+        end
+      end
+    end
+
+    @codec.on_event do |event, payload|
+      @client_threads.select!(&:alive?)
+      @client_threads.each do |client_thread|
+        client_thread[:client].write(payload)
+      end
+    end
+  end
+
+  def run_as_client
+    client_socket = nil
+    @codec.on_event do |event, payload|
       begin
-        @server_socket = TCPServer.new(@host, @port)
-      rescue Errno::EADDRINUSE
-        @logger.error("Could not start tcp server: Address in use", host: @host, port: @port)
-        raise
-      end
-      if @ssl_enable
-        @server_socket = OpenSSL::SSL::SSLServer.new(@server_socket, @ssl_context)
-      end # @ssl_enable
-      @client_threads = Concurrent::Array.new
+        client_socket = connect unless client_socket
+        r,w,_ = IO.select([client_socket],[client_socket])
 
-      @accept_thread = Thread.new(@server_socket) do |server_socket|
-        LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|server_accept")
-        loop do
-          break if @closed.value
-          client_socket = server_socket.accept_nonblock exception: false
-          if client_socket == :wait_readable
-            IO.select [ server_socket ]
-            next
-          end
-          Thread.start(client_socket) do |client_socket|
-            # monkeypatch a 'peer' method onto the socket.
-            client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
-            @logger.debug("accepted connection", client: client_socket.peer, server: "#{@host}:#{@port}")
-            client = Client.new(client_socket, @logger)
-            Thread.current[:client] = client
-            LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|client_socket-#{@client_threads.size}")
-            @client_threads << Thread.current
-            client.run unless @closed.value
-          end
-        end
-      end
+        # don't expect any reads, but a readable socket might
+        # mean the remote end closed, so read it and throw it away.
+        # we'll get an EOFError if it happens.
+        r.each { |readable| readable.sysread(16384) }
 
-      @codec.on_event do |event, payload|
-        @client_threads.select!(&:alive?)
-        @client_threads.each do |client_thread|
-          client_thread[:client].write(payload)
+        # first IO#select attempt allows to be sure read socket is available
+        # rest of IO#select calls allow to wait the socket to be writable ready
+        while w == nil || w.any? == false
+          r,w,_ = IO.select([client_socket],[client_socket])
         end
-      end
-    else
-      client_socket = nil
-      @codec.on_event do |event, payload|
-        begin
-          client_socket = connect unless client_socket
-          r,w,e = IO.select([client_socket], [client_socket], [client_socket], nil)
-          # don't expect any reads, but a readable socket might
-          # mean the remote end closed, so read it and throw it away.
-          # we'll get an EOFError if it happens.
-          client_socket.sysread(16384) if r.any?
 
-          # Now send the payload
-          client_socket.syswrite(payload) if w.any?
-        rescue => e
-          log_warn "client socket failed:", e, host: @host, port: @port, socket: (client_socket ? client_socket.to_s : nil)
-          client_socket.close rescue nil
-          client_socket = nil
-          sleep @reconnect_interval
-          retry
+        while payload && payload.bytesize > 0
+          written = client_socket.syswrite(payload)
+          payload = payload.byteslice(written..-1)
         end
+      rescue => e
+        log_warn "client socket failed:", e, host: @host, port: @port, socket: (client_socket ? client_socket.to_s : nil)
+        client_socket.close rescue nil
+        client_socket = nil
+        sleep @reconnect_interval
+        retry
       end
     end
   end
