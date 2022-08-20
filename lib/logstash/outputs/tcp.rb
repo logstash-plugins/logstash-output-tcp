@@ -56,6 +56,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   class Client
 
+    ##
+    # @param socket [Socket]
+    # @param logger_context [#log_warn&#log_error]
     def initialize(socket, logger_context)
       @socket = socket
       @logger_context = logger_context
@@ -142,8 +145,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     @thread_no = Concurrent::AtomicFixnum.new(0)
     setup_ssl if @ssl_enable
 
-    run_as_server if server?
-    run_as_client unless server?
+    if server?
+      run_as_server
+    else
+      run_as_client
+    end
   end
 
   def run_as_server
@@ -174,8 +180,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           @logger.debug("accepted connection", client: client_socket.peer, server: "#{@host}:#{@port}")
           client = Client.new(client_socket, self)
           Thread.current[:client] = client
-          @thread_no.increment
-          LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|client_socket-#{@thread_no.value}")
+          LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|client_socket-#{@thread_no.increment}")
           @client_threads << Thread.current
           client.run unless @closed.value
         end
@@ -196,9 +201,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       begin
         client_socket = connect unless client_socket
 
-        writable_oi = nil
-        while writable_oi.nil? || writable_oi.any? == false
-          readable_io, writable_oi, _ = IO.select([client_socket],[client_socket])
+        writable_io = nil
+        while writable_io.nil? || writable_io.any? == false
+          readable_io, writable_io, _ = IO.select([client_socket],[client_socket])
 
           # don't expect any reads, but a readable socket might
           # mean the remote end closed, so read it and throw it away.
