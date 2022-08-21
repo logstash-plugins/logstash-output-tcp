@@ -1,5 +1,5 @@
 ## 6.1.1
-  - Fix: client ensures to transmit payload size data [#49](https://github.com/logstash-plugins/logstash-output-tcp/pull/49)
+  - Fixes an issue where payloads larger than a connection's current TCP window could be silently truncated [#49](https://github.com/logstash-plugins/logstash-output-tcp/pull/49)
 
 ## 6.1.0
   - Feat: ssl_supported_protocols (TLSv1.3) [#47](https://github.com/logstash-plugins/logstash-output-tcp/pull/47)
