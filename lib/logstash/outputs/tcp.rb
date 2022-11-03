@@ -161,9 +161,14 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       end
     else
       client_socket = nil
+      peer_info = nil
       @codec.on_event do |event, payload|
         begin
-          client_socket = connect unless client_socket
+          # not threadsafe; this is why we require `concurrency: single`
+          unless client_socket
+            client_socket = connect
+            peer_info = client_socket.peer
+          end
 
           writable_io = nil
           while writable_io.nil? || writable_io.any? == false
@@ -176,12 +181,14 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           end
 
           # Now send the payload
+          @logger.trace("transmitting #{payload.bytesize} bytes", socket: peer_info) if @logger.trace? && payload && !payload.empty?
           while payload && payload.bytesize > 0
             written_bytes_size = client_socket.syswrite(payload)
             payload = payload.byteslice(written_bytes_size..-1)
+            @logger.trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: peer_info) if @logger.trace?
           end
         rescue => e
-          log_warn "client socket failed:", e, host: @host, port: @port, socket: client_socket&.to_s
+          log_warn "client socket failed:", e, host: @host, port: @port, socket: peer_info
           client_socket.close rescue nil
           client_socket = nil
           sleep @reconnect_interval
