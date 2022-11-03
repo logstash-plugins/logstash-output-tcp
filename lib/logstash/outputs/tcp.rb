@@ -141,7 +141,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           break if @closed.value
           Thread.start(server_socket.accept) do |client_socket|
             # monkeypatch a 'peer' method onto the socket.
-            client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
+            client_socket.extend(::LogStash::Util::SocketPeer)
             @logger.debug("Accepted connection", :client => client_socket.peer,
                           :server => "#{@host}:#{@port}")
             client = Client.new(client_socket, self)
@@ -164,14 +164,22 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @codec.on_event do |event, payload|
         begin
           client_socket = connect unless client_socket
-          r,w,e = IO.select([client_socket], [client_socket], [client_socket], nil)
-          # don't expect any reads, but a readable socket might
-          # mean the remote end closed, so read it and throw it away.
-          # we'll get an EOFError if it happens.
-          client_socket.sysread(16384) if r.any?
+
+          writable_io = nil
+          while writable_io.nil? || writable_io.any? == false
+            readable_io, writable_io, _ = IO.select([client_socket],[client_socket])
+
+            # don't expect any reads, but a readable socket might
+            # mean the remote end closed, so read it and throw it away.
+            # we'll get an EOFError if it happens.
+            readable_io.each { |readable| readable.sysread(16384) }
+          end
 
           # Now send the payload
-          client_socket.syswrite(payload) if w.any?
+          while payload && payload.bytesize > 0
+            written_bytes_size = client_socket.syswrite(payload)
+            payload = payload.byteslice(written_bytes_size..-1)
+          end
         rescue => e
           log_warn "client socket failed:", e, host: @host, port: @port, socket: client_socket&.to_s
           client_socket.close rescue nil
@@ -210,7 +218,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           raise
         end
       end
-      client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
+      client_socket.extend(::LogStash::Util::SocketPeer)
       @logger.debug("Opened connection", :client => "#{client_socket.peer}")
       return client_socket
     rescue StandardError => e
