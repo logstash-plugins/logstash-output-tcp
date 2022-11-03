@@ -1,3 +1,7 @@
+## 6.0.3
+  - Pulled applicable back-ports from 6.1.0
+    - Fix: Ensure sockets are closed when this plugin is closed
+
 ## 6.0.2
   - Fix: unable to start with password protected key [#45](https://github.com/logstash-plugins/logstash-output-tcp/pull/45)
 
