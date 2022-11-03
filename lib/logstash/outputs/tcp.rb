@@ -169,19 +169,19 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         end
       end
     else
-      client_socket = nil
+      @client_socket = nil
       peer_info = nil
       @codec.on_event do |event, payload|
         begin
           # not threadsafe; this is why we require `concurrency: single`
-          unless client_socket
-            client_socket = connect
-            peer_info = client_socket.peer
+          unless @client_socket
+            @client_socket = connect
+            peer_info = @client_socket.peer
           end
 
           writable_io = nil
           while writable_io.nil? || writable_io.any? == false
-            readable_io, writable_io, _ = IO.select([client_socket],[client_socket])
+            readable_io, writable_io, _ = IO.select([@client_socket],[@client_socket])
 
             # don't expect any reads, but a readable socket might
             # mean the remote end closed, so read it and throw it away.
@@ -192,15 +192,15 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
           # Now send the payload
           @logger.trace("transmitting #{payload.bytesize} bytes", socket: peer_info) if @logger.trace? && payload && !payload.empty?
           while payload && payload.bytesize > 0
-            written_bytes_size = client_socket.syswrite(payload)
+            written_bytes_size = @client_socket.syswrite(payload)
             payload = payload.byteslice(written_bytes_size..-1)
             @logger.trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: peer_info) if @logger.trace?
             sleep 0.1 unless payload.empty?
           end
         rescue => e
           log_warn "client socket failed:", e, host: @host, port: @port, socket: peer_info
-          client_socket.close rescue nil
-          client_socket = nil
+          @client_socket.close rescue nil
+          @client_socket = nil
           sleep @reconnect_interval
           retry
         end
@@ -210,13 +210,18 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   # @overload Base#close
   def close
-    @closed.make_true
-    @server_socket.close rescue nil if @server_socket
+    if server?
+      # server-mode clean-up
+      @closed.make_true
+      @server_socket.shutdown rescue nil if @server_socket
 
-    return unless @client_threads
-    @client_threads.each do |thread|
-      client = thread[:client]
-      client.close rescue nil if client
+      @client_threads&.each do |thread|
+        client = thread[:client]
+        client.close rescue nil if client
+      end
+    else
+      # client-mode clean-up
+      @client_socket&.close
     end
   end
 
