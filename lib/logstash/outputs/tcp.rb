@@ -53,10 +53,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   ##
   # @param socket [Socket]
-  # @param logger_context [#log_warn&#log_error]
+  # @param logger_context [#log_warn&#log_error&#logger]
   class Client
     def initialize(socket, logger_context)
       @socket = socket
+      @peer_info = socket.peer
       @logger_context = logger_context
       @queue  = Queue.new
     end
@@ -64,9 +65,17 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     def run
       loop do
         begin
-          @socket.write(@queue.pop)
+          payload = @queue.pop
+
+          @logger_context.logger.trace("transmitting #{payload.bytesize} bytes", socket: @peer_info) if @logger_context.logger.trace? && payload && !payload.empty?
+          while payload && !payload.empty?
+            written_bytes_size = @socket.write(payload)
+            payload = payload.byteslice(written_bytes_size..-1)
+            @logger_context.logger.log_trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: @peer_info) if @logger_context.logger.trace?
+            sleep 0.1 unless payload.empty?
+          end
         rescue => e
-          @logger_context.log_warn("tcp output exception: socket write failed", e, :socket => @socket&.to_s)
+          @logger_context.log_warn("tcp output exception: socket write failed", e, :socket => @peer_info)
           break
         end
       end
