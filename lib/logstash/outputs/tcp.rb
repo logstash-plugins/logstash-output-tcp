@@ -51,31 +51,44 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # SSL key passphrase
   config :ssl_key_passphrase, :validate => :password, :default => nil
 
+  ##
+  # @param socket [Socket]
+  # @param logger_context [#log_warn&#log_error&#logger]
   class Client
-    public
-    def initialize(socket, logger)
+    def initialize(socket, logger_context)
       @socket = socket
-      @logger = logger
+      @peer_info = socket.peer
+      @logger_context = logger_context
       @queue  = Queue.new
     end
 
-    public
     def run
       loop do
         begin
-          @socket.write(@queue.pop)
+          payload = @queue.pop
+
+          @logger_context.logger.trace("transmitting #{payload.bytesize} bytes", socket: @peer_info) if @logger_context.logger.trace? && payload && !payload.empty?
+          while payload && !payload.empty?
+            written_bytes_size = @socket.write(payload)
+            payload = payload.byteslice(written_bytes_size..-1)
+            @logger_context.logger.log_trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: @peer_info) if @logger_context.logger.trace?
+          end
         rescue => e
-          @logger.warn("tcp output exception", :socket => @socket,
-                       :exception => e)
+          @logger_context.log_warn("tcp output exception: socket write failed", e, :socket => @peer_info)
           break
         end
       end
     end # def run
 
-    public
     def write(msg)
       @queue.push(msg)
     end # def write
+
+    def close
+      @socket.close
+    rescue => e
+      @logger_context.log_warn 'socket close failed:', e, socket: @socket&.to_s
+    end
   end # class Client
 
   private
@@ -113,6 +126,8 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     if @ssl_enable
       setup_ssl
     end # @ssl_enable
+    @closed = Concurrent::AtomicBoolean.new(false)
+    @thread_no = Concurrent::AtomicFixnum.new(0)
 
     if server?
       @logger.info("Starting tcp output listener", :address => "#{@host}:#{@port}")
@@ -129,50 +144,84 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @client_threads = []
 
       @accept_thread = Thread.new(@server_socket) do |server_socket|
+        LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|server_accept")
         loop do
+          break if @closed.value
           Thread.start(server_socket.accept) do |client_socket|
             # monkeypatch a 'peer' method onto the socket.
-            client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
+            client_socket.extend(::LogStash::Util::SocketPeer)
             @logger.debug("Accepted connection", :client => client_socket.peer,
                           :server => "#{@host}:#{@port}")
-            client = Client.new(client_socket, @logger)
+            client = Client.new(client_socket, self)
             Thread.current[:client] = client
+            LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|client_socket-#{@thread_no.increment}")
             @client_threads << Thread.current
-            client.run
+            client.run unless @closed.value
           end
         end
       end
 
       @codec.on_event do |event, payload|
+        @client_threads.select!(&:alive?)
         @client_threads.each do |client_thread|
           client_thread[:client].write(payload)
         end
-        @client_threads.reject! {|t| !t.alive? }
       end
     else
-      client_socket = nil
+      @client_socket = nil
+      peer_info = nil
       @codec.on_event do |event, payload|
         begin
-          client_socket = connect unless client_socket
-          r,w,e = IO.select([client_socket], [client_socket], [client_socket], nil)
-          # don't expect any reads, but a readable socket might
-          # mean the remote end closed, so read it and throw it away.
-          # we'll get an EOFError if it happens.
-          client_socket.sysread(16384) if r.any?
+          # not threadsafe; this is why we require `concurrency: single`
+          unless @client_socket
+            @client_socket = connect
+            peer_info = @client_socket.peer
+          end
+
+          writable_io = nil
+          while writable_io.nil? || writable_io.any? == false
+            readable_io, writable_io, _ = IO.select([@client_socket],[@client_socket])
+
+            # don't expect any reads, but a readable socket might
+            # mean the remote end closed, so read it and throw it away.
+            # we'll get an EOFError if it happens.
+            readable_io.each { |readable| readable.sysread(16384) }
+          end
 
           # Now send the payload
-          client_socket.syswrite(payload) if w.any?
+          @logger.trace("transmitting #{payload.bytesize} bytes", socket: peer_info) if @logger.trace? && payload && !payload.empty?
+          while payload && payload.bytesize > 0
+            written_bytes_size = @client_socket.syswrite(payload)
+            payload = payload.byteslice(written_bytes_size..-1)
+            @logger.trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: peer_info) if @logger.trace?
+          end
         rescue => e
-          @logger.warn("tcp output exception", :host => @host, :port => @port,
-                       :exception => e, :backtrace => e.backtrace)
-          client_socket.close rescue nil
-          client_socket = nil
+          log_warn "client socket failed:", e, host: @host, port: @port, socket: peer_info
+          @client_socket.close rescue nil
+          @client_socket = nil
           sleep @reconnect_interval
           retry
         end
       end
     end
   end # def register
+
+  # @overload Base#close
+  def close
+    if server?
+      # server-mode clean-up
+      @closed.make_true
+      @server_socket.shutdown rescue nil if @server_socket
+
+      @client_threads&.each do |thread|
+        client = thread[:client]
+        client.close rescue nil if client
+      end
+    else
+      # client-mode clean-up
+      @client_socket&.close
+    end
+  end
 
   private
   def connect
@@ -183,17 +232,17 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         begin
           client_socket.connect
         rescue OpenSSL::SSL::SSLError => ssle
-          @logger.error("SSL Error", :exception => ssle, :backtrace => ssle.backtrace)
+          log_error 'connect ssl failure:', ssle, backtrace: false
           # NOTE(mrichar1): Hack to prevent hammering peer
           sleep(5)
           raise
         end
       end
-      client_socket.instance_eval { class << self; include ::LogStash::Util::SocketPeer end }
+      client_socket.extend(::LogStash::Util::SocketPeer)
       @logger.debug("Opened connection", :client => "#{client_socket.peer}")
       return client_socket
     rescue StandardError => e
-      @logger.error("Failed to connect: #{e.message}", :exception => e.class, :backtrace => e.backtrace)
+      log_error 'failed to connect:', e
       sleep @reconnect_interval
       retry
     end
@@ -208,4 +257,20 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def receive(event)
     @codec.encode(event)
   end # def receive
+
+  def pipeline_id
+    execution_context.pipeline_id || 'main'
+  end
+
+  def log_warn(msg, e, backtrace: @logger.debug?, **details)
+    details = details.merge message: e.message, exception: e.class
+    details[:backtrace] = e.backtrace if backtrace
+    @logger.warn(msg, details)
+  end
+
+  def log_error(msg, e, backtrace: @logger.info?, **details)
+    details = details.merge message: e.message, exception: e.class
+    details[:backtrace] = e.backtrace if backtrace
+    @logger.error(msg, details)
+  end
 end # class LogStash::Outputs::Tcp

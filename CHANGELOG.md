@@ -1,3 +1,9 @@
+## 6.0.3
+  - Pulled applicable back-ports from 6.1.0 [#50](https://github.com/logstash-plugins/logstash-output-tcp/pull/50)
+    - Fix: Ensure sockets are closed when this plugin is closed
+    - Fix: Fixes an issue in client mode where payloads larger than a connection's current TCP window could be silently truncated
+  - Fix: Fixes an issue in server mode where payloads larger than a connection's current TCP window could be silently truncated
+
 ## 6.0.2
   - Fix: unable to start with password protected key [#45](https://github.com/logstash-plugins/logstash-output-tcp/pull/45)
 
