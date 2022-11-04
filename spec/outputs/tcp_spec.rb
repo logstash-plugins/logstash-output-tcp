@@ -78,10 +78,13 @@ describe LogStash::Outputs::Tcp do
   # Reads `in_io` until EOF and writes the bytes
   # it receives to `out_io`, tolerating partial writes.
   def siphon_until_eof(in_io, out_io)
-    while (buffer = in_io.read(16*1024)) do
+    buffer = ""
+    while (retval = in_io.read_nonblock(32*1024, buffer, exception:false)) do
+      (IO.select([in_io], nil, nil, 5); next) if retval == :wait_readable
+
       while (buffer && !buffer.empty?) do
         bytes_written = out_io.write(buffer)
-        buffer = buffer.byteslice(bytes_written..-1)
+        buffer.replace buffer.byteslice(bytes_written..-1)
       end
     end
   end
@@ -118,8 +121,9 @@ describe LogStash::Outputs::Tcp do
 
       it 'encodes and transmits data' do
         instance.receive(event)
-        instance.close # release the connection
         sleep 1
+        instance.close # release the connection
+        @server_socket_thread.join(30)  || fail('server failed to join')
         expect(io.string).to include('"hello"','"world"')
       end
 
@@ -130,8 +134,9 @@ describe LogStash::Outputs::Tcp do
 
         it 'encodes and transmits data' do
           instance.receive(event)
-          instance.close # release the connection
           sleep 1
+          instance.close # release the connection
+          @server_socket_thread.join(30)  || fail('server failed to join')
           expect(io.string).to include('"message"',%Q("#{one_hundred_megabyte_message}"))
         end
       end
@@ -139,6 +144,16 @@ describe LogStash::Outputs::Tcp do
   end
 
   context 'server mode' do
+
+    def wait_for_condition(total_time_in_seconds, &block)
+      deadline = Time.now + total_time_in_seconds
+      until Time.now > deadline
+        return if yield
+        sleep(1)
+      end
+      fail('condition not met!')
+    end
+
     context 'transmitting data' do
       let(:server_host) { 'localhost' }
       let(:server_port) { Random.rand(1024...5000) }
@@ -164,8 +179,10 @@ describe LogStash::Outputs::Tcp do
         end
 
         it 'encodes and transmits data' do
+          sleep 1
           instance.receive(event)
 
+          wait_for_condition(30) { !io.size.zero? }
           sleep 1 # wait for the event to get sent...
           instance.close # release the connection
 
@@ -180,6 +197,7 @@ describe LogStash::Outputs::Tcp do
           it 'encodes and transmits data' do
           instance.receive(event)
 
+          wait_for_condition(30) { io.size >= one_hundred_megabyte_message.size }
           sleep 1 # wait for the event to get sent...
           instance.close # release the connection
 
