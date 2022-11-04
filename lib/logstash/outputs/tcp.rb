@@ -72,7 +72,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
             written_bytes_size = @socket.write(payload)
             payload = payload.byteslice(written_bytes_size..-1)
             @logger_context.logger.log_trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: @peer_info) if @logger_context.logger.trace?
-            sleep 0.1 unless payload.empty?
           end
         rescue => e
           @logger_context.log_warn("tcp output exception: socket write failed", e, :socket => @peer_info)
@@ -195,7 +194,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
             written_bytes_size = @client_socket.syswrite(payload)
             payload = payload.byteslice(written_bytes_size..-1)
             @logger.trace(">transmitted #{written_bytes_size} bytes; #{payload.bytesize} bytes remain", socket: peer_info) if @logger.trace?
-            sleep 0.1 unless payload.empty?
           end
         rescue => e
           log_warn "client socket failed:", e, host: @host, port: @port, socket: peer_info
