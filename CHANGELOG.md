@@ -1,3 +1,6 @@
+## 6.1.2
+  - Changed the client mode to write using the non-blocking method. [#50](https://github.com/logstash-plugins/logstash-output-tcp/pull/50)
+
 ## 6.1.1
   - Fixes an issue where payloads larger than a connection's current TCP window could be silently truncated [#49](https://github.com/logstash-plugins/logstash-output-tcp/pull/49)
 

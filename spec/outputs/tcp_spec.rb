@@ -108,6 +108,33 @@ describe LogStash::Outputs::Tcp do
     end
   end
 
+  context "client mode" do
+    before { subject.register }
+
+    let(:config) { super().merge 'mode' => 'client' }
+
+    it 'writes payload data' do
+      Thread.start { sleep 0.25; subject.receive event }
+
+      socket = server.accept
+      read = socket.sysread(100)
+
+      expect( read.size ).to be > 0
+      expect( read ).to eq(JSON.generate(event))
+    end
+
+    it 'writes payload data in multiple operations' do
+      full_payload = JSON.generate(event)
+      Thread.start { sleep 0.25; subject.receive event }
+
+      socket = server.accept
+      first_read = socket.sysread((full_payload.length / 2))
+      second_read = socket.sysread(((full_payload.length / 2) + 1))
+
+      expect( "#{first_read}#{second_read}" ).to eq(full_payload)
+    end
+  end
+
   context "when enabling SSL" do
     let(:config) { super().merge("ssl_enable" => true, 'codec' => 'plain') }
     context "and not providing a certificate/key pair" do
