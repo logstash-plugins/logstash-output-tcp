@@ -254,5 +254,50 @@ describe LogStash::Outputs::Tcp do
 
       end
     end
+
+    context "and protocol is TLSv1.3" do
+      let(:key_file) { File.join(FIXTURES_PATH, 'plaintext/instance.key') }
+      let(:crt_file) { File.join(FIXTURES_PATH, 'plaintext/instance.crt') }
+      let(:config) { super().merge("ssl_cert" => crt_file, "ssl_key" => key_file) }
+
+      let(:secure_server) do
+        ssl_context = OpenSSL::SSL::SSLContext.new
+        ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+        ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(crt_file))
+        ssl_context.key = OpenSSL::PKey::RSA.new(File.read(key_file), nil)
+        ssl_context.min_version = OpenSSL::SSL::TLS1_3_VERSION
+        OpenSSL::SSL::SSLServer.new(server, ssl_context)
+      end
+
+      before {
+        subject.register
+      }
+
+      after {
+        secure_server.close
+      }
+
+      it 'successfully writes 1k messages' do
+        Timeout::timeout(30) do
+          expected_messages = 1000
+          received_messages = 0
+
+          thread = Thread.start do
+              client = secure_server.accept
+              while received_messages != expected_messages && client.sysread(10)
+                received_messages += 1
+              end
+              client.close
+          end
+
+          (1..expected_messages).each do |i|
+            subject.receive i.to_s
+          end
+
+          thread.join(10)
+          expect(received_messages).to be expected_messages
+        end
+      end
+    end
   end
 end
