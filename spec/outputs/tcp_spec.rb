@@ -269,34 +269,43 @@ describe LogStash::Outputs::Tcp do
         OpenSSL::SSL::SSLServer.new(server, ssl_context)
       end
 
-      before {
+      before(:each) {
         subject.register
       }
 
-      after {
-        secure_server.close
+      after(:each) {
+        secure_server.close rescue nil
       }
 
-      it 'successfully writes 1k messages' do
-        Timeout::timeout(30) do
-          expected_messages = 1000
-          received_messages = 0
 
-          thread = Thread.start do
-              client = secure_server.accept
-              while received_messages != expected_messages && client.sysread(10)
-                received_messages += 1
-              end
+      # This test confirms that this plugin is able to write to a TLS socket
+      # multiple times.
+      # Previous implementation performed an IO.select first and called sysread
+      # if select signaled the socket was ready to read.
+      # For TLS1_3, due to control messages it may happen that the underlying
+      # socket is marked as readable but there is no new data available,
+      # causing a read to block forever.
+      # This test will raise a Timeout exception with the old implementation.
+      it 'successfully writes two messages' do
+        message = "a"
+
+        buffer = ""
+        thread = Thread.start do
+          expect {
+            client = secure_server.accept
+            Timeout::timeout(5) do
+              buffer << client.sysread(1) # read first message
+              subject.receive(message)
+              buffer << client.sysread(1) # read second message
               client.close
-          end
-
-          (1..expected_messages).each do |i|
-            subject.receive i.to_s
-          end
-
-          thread.join(10)
-          expect(received_messages).to be expected_messages
+            end
+          }.to_not raise_error
         end
+        sleep 0.1 until thread.status == "sleep" # wait for TCP port to open
+        subject.receive(message) # send first message to unblock call to `accept`
+        thread.join(2)
+
+        expect(buffer).to eq(message * 2)
       end
     end
   end
