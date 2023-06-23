@@ -269,14 +269,16 @@ describe LogStash::Outputs::Tcp do
         OpenSSL::SSL::SSLServer.new(server, ssl_context)
       end
 
-      before(:each) {
+      before(:each) do
         subject.register
-      }
+      end
 
-      after(:each) {
+      after(:each) do
         secure_server.close rescue nil
-      }
+      end
 
+      let(:message) { "a" }
+      let(:buffer) { "" }
 
       # This test confirms that this plugin is able to write to a TLS socket
       # multiple times.
@@ -287,9 +289,6 @@ describe LogStash::Outputs::Tcp do
       # causing a read to block forever.
       # This test will raise a Timeout exception with the old implementation.
       it 'successfully writes two messages' do
-        message = "a"
-
-        buffer = ""
         thread = Thread.start do
           expect {
             client = secure_server.accept
