@@ -108,6 +108,33 @@ describe LogStash::Outputs::Tcp do
     end
   end
 
+  context "client mode" do
+    before { subject.register }
+
+    let(:config) { super().merge 'mode' => 'client' }
+
+    it 'writes payload data' do
+      Thread.start { sleep 0.25; subject.receive event }
+
+      socket = server.accept
+      read = socket.sysread(100)
+
+      expect( read.size ).to be > 0
+      expect( read ).to eq(JSON.generate(event))
+    end
+
+    it 'writes payload data in multiple operations' do
+      full_payload = JSON.generate(event)
+      Thread.start { sleep 0.25; subject.receive event }
+
+      socket = server.accept
+      first_read = socket.sysread((full_payload.length / 2))
+      second_read = socket.sysread(((full_payload.length / 2) + 1))
+
+      expect( "#{first_read}#{second_read}" ).to eq(full_payload)
+    end
+  end
+
   context "when enabling SSL" do
     let(:config) { super().merge("ssl_enable" => true, 'codec' => 'plain') }
     context "and not providing a certificate/key pair" do
@@ -225,6 +252,59 @@ describe LogStash::Outputs::Tcp do
           expect { subject.register }.to_not raise_error
         end
 
+      end
+    end
+
+    context "and protocol is TLSv1.3" do
+      let(:key_file) { File.join(FIXTURES_PATH, 'plaintext/instance.key') }
+      let(:crt_file) { File.join(FIXTURES_PATH, 'plaintext/instance.crt') }
+      let(:config) { super().merge("ssl_cert" => crt_file, "ssl_key" => key_file) }
+
+      let(:secure_server) do
+        ssl_context = OpenSSL::SSL::SSLContext.new
+        ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+        ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(crt_file))
+        ssl_context.key = OpenSSL::PKey::RSA.new(File.read(key_file), nil)
+        ssl_context.min_version = OpenSSL::SSL::TLS1_3_VERSION
+        OpenSSL::SSL::SSLServer.new(server, ssl_context)
+      end
+
+      before(:each) do
+        subject.register
+      end
+
+      after(:each) do
+        secure_server.close rescue nil
+      end
+
+      let(:message) { "a" }
+      let(:buffer) { "" }
+
+      # This test confirms that this plugin is able to write to a TLS socket
+      # multiple times.
+      # Previous implementation performed an IO.select first and called sysread
+      # if select signaled the socket was ready to read.
+      # For TLS1_3, due to control messages it may happen that the underlying
+      # socket is marked as readable but there is no new data available,
+      # causing a read to block forever.
+      # This test will raise a Timeout exception with the old implementation.
+      it 'successfully writes two messages' do
+        thread = Thread.start do
+          expect {
+            client = secure_server.accept
+            Timeout::timeout(5) do
+              buffer << client.sysread(1) # read first message
+              subject.receive(message)
+              buffer << client.sysread(1) # read second message
+              client.close
+            end
+          }.to_not raise_error
+        end
+        sleep 0.1 until thread.status == "sleep" # wait for TCP port to open
+        subject.receive(message) # send first message to unblock call to `accept`
+        thread.join(2)
+
+        expect(buffer).to eq(message * 2)
       end
     end
   end

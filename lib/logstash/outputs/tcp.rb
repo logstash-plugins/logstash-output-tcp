@@ -200,20 +200,17 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     @codec.on_event do |event, payload|
       begin
         client_socket = connect unless client_socket
-
-        writable_io = nil
-        while writable_io.nil? || writable_io.any? == false
-          readable_io, writable_io, _ = IO.select([client_socket],[client_socket])
-
-          # don't expect any reads, but a readable socket might
-          # mean the remote end closed, so read it and throw it away.
-          # we'll get an EOFError if it happens.
-          readable_io.each { |readable| readable.sysread(16384) }
-        end
-
         while payload && payload.bytesize > 0
-          written_bytes_size = client_socket.syswrite(payload)
-          payload = payload.byteslice(written_bytes_size..-1)
+          begin
+            written_bytes_size = client_socket.write_nonblock(payload)
+            payload = payload.byteslice(written_bytes_size..-1)
+          rescue IO::WaitReadable
+            IO.select([client_socket])
+            retry
+          rescue IO::WaitWritable
+            IO.select(nil, [client_socket])
+            retry
+          end
         end
       rescue => e
         log_warn "client socket failed:", e, host: @host, port: @port, socket: (client_socket ? client_socket.to_s : nil)
