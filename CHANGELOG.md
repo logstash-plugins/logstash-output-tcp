@@ -1,3 +1,12 @@
+## 6.2.0
+  - Reviewed and deprecated SSL settings to comply with Logstash's naming convention [#53](https://github.com/logstash-plugins/logstash-output-tcp/pull/53)
+    - Deprecated `ssl_enable` in favor of `ssl_enabled`
+    - Deprecated `ssl_cert` in favor of `ssl_certificate`
+    - Deprecated `ssl_verify` in favor of `ssl_client_authentication` when mode is `server`
+    - Deprecated `ssl_verify` in favor of `ssl_verification_mode` when mode is `client`
+  - Added `ssl_cipher_suites` configuration
+  - Added SSL configuration validations
+
 ## 6.1.2
   - Changed the client mode to write using the non-blocking method. [#52](https://github.com/logstash-plugins/logstash-output-tcp/pull/52)
 

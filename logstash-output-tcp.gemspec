@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
 
   s.name            = 'logstash-output-tcp'
-  s.version         = '6.1.2'
+  s.version         = '6.2.0'
   s.licenses        = ['Apache License (2.0)']
   s.summary         = "Writes events over a TCP socket"
   s.description     = "This gem is a Logstash plugin required to be installed on top of the Logstash core pipeline using $LS_HOME/bin/logstash-plugin install gemname. This gem is not a stand-alone program"
@@ -24,6 +24,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'logstash-core', '>= 8.1.0'
   s.add_runtime_dependency 'logstash-codec-json'
   s.add_runtime_dependency 'stud'
+  s.add_runtime_dependency 'logstash-mixin-normalize_config_support', '~>1.0'
 
   s.add_runtime_dependency 'jruby-openssl', '>= 0.12.2' # 0.12 supports TLSv1.3
 
