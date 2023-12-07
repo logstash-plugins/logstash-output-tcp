@@ -229,11 +229,16 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         # SSLError errors, as they may be client's issues such as missing client's
         # certificates, ciphers, etc. If it's not rescued here, it would close the
         # TCP server and exit the plugin.
+        # On the other hand, IOError should normally happen when the pipeline configuration
+        # is reloaded, as the stream gets closed in the thread
         if @ssl_enabled
           begin
             client_socket = server_socket.accept
           rescue OpenSSL::SSL::SSLError => e
             log_warn("SSL Error", e)
+            retry unless @closed.value
+          rescue IOError => e
+            log_warn("IO Error", e)
             retry unless @closed.value
           end
         else
