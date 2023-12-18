@@ -465,5 +465,32 @@ describe LogStash::Outputs::Tcp do
         expect{subject.register}.to raise_error(LogStash::ConfigurationError, /`ssl_client_authentication` must not be configured when mode is `client`, use `ssl_verification_mode` instead/)
       end
     end
+
+    context "with ssl_certificate_authorities" do
+      let(:certificate_path) { File.join(FIXTURES_PATH, 'plaintext/instance.crt') }
+      let(:config) do
+        super().merge('ssl_certificate_authorities' => [certificate_path])
+      end
+
+      it "sets cert_store values" do
+        ssl_store = double(OpenSSL::X509::Store.new)
+        allow(ssl_store).to receive(:set_default_paths)
+        allow(ssl_store).to receive(:add_file)
+        allow(subject).to receive(:new_ssl_certificate_store).and_return(ssl_store)
+        subject.send :setup_ssl
+        expect(ssl_store).to have_received(:add_file).with(certificate_path)
+      end
+    end
+
+    context "CAs certificates" do
+      it "includes openssl default paths" do
+        ssl_store = double(OpenSSL::X509::Store.new)
+        allow(ssl_store).to receive(:set_default_paths)
+        allow(subject).to receive(:new_ssl_certificate_store).and_return(ssl_store)
+        subject.send :setup_ssl
+        expect(ssl_store).to have_received(:set_default_paths)
+      end
+    end
+
   end
 end

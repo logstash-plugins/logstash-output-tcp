@@ -174,8 +174,13 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   end
   private :new_ssl_context
 
+  def new_ssl_certificate_store
+    OpenSSL::X509::Store.new
+  end
+  private :new_ssl_certificate_store
+
   def load_cert_store
-    cert_store = OpenSSL::X509::Store.new
+    cert_store = new_ssl_certificate_store
     cert_store.set_default_paths
     @ssl_certificate_authorities&.each do |cert|
       cert_store.add_file(cert)
