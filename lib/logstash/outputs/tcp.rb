@@ -3,6 +3,7 @@ require "logstash/outputs/base"
 require "logstash/namespace"
 require "thread"
 require "logstash/util/socket_peer"
+require "logstash/plugin_mixins/normalize_config_support"
 
 # Write events over a TCP socket.
 #
@@ -11,6 +12,8 @@ require "logstash/util/socket_peer"
 # Can either accept connections from clients or connect to a server,
 # depending on `mode`.
 class LogStash::Outputs::Tcp < LogStash::Outputs::Base
+
+  include LogStash::PluginMixins::NormalizeConfigSupport
 
   config_name "tcp"
   concurrency :single
@@ -33,17 +36,41 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   config :mode, :validate => ["server", "client"], :default => "client"
 
   # Enable SSL (must be set for other `ssl_` options to take effect).
-  config :ssl_enable, :validate => :boolean, :default => false
+  config :ssl_enable, :validate => :boolean, :default => false, :deprecated => "Use 'ssl_enabled' instead."
+
+  # Enable SSL (must be set for other `ssl_` options to take effect).
+  config :ssl_enabled, :validate => :boolean, :default => false
+
+  # Controls the server’s behavior in regard to requesting a certificate from client connections.
+  # `none`: No client authentication
+  # `optional`: Requests a client certificate but the client is not required to present one.
+  # `required`: Forces a client to present a certificate.
+  # This option needs to be used with `ssl_certificate_authorities` and a defined list of CAs.
+  config :ssl_client_authentication, :validate => %w[none optional required], :default => 'none'
 
   # Verify the identity of the other end of the SSL connection against the CA.
   # For input, sets the field `sslsubject` to that of the client certificate.
-  config :ssl_verify, :validate => :boolean, :default => false
+  config :ssl_verify, :validate => :boolean, :default => false, :deprecated => "Use 'ssl_client_authentication' when `mode` is 'server' or 'ssl_verification_mode' when mode is `client`"
+
+  # Options to verify the server's certificate.
+  # "full": validates that the provided certificate has an issue date that’s within the not_before and not_after dates;
+  # chains to a trusted Certificate Authority (CA); has a hostname or IP address that matches the names within the certificate.
+  # "certificate": Validates the provided certificate and verifies that it’s signed by a trusted authority (CA), but does’t check the certificate hostname.
+  # "none": performs no certificate validation. Disabling this severely compromises security (https://www.cs.utexas.edu/~shmat/shmat_ccs12.pdf)
+  config :ssl_verification_mode, :validate => %w[full none], :default => 'full'
 
   # The SSL CA certificate, chainfile or CA path. The system CA path is automatically included.
-  config :ssl_cacert, :validate => :path
+  config :ssl_cacert, :validate => :path, :deprecated => "Use 'ssl_certificate_authorities' instead."
+
+  # Validate client certificate or certificate chain against these authorities. You can define multiple files.
+  # All the certificates will be read and added to the trust store.
+  config :ssl_certificate_authorities, :validate => :path, :list => true
 
   # SSL certificate path
-  config :ssl_cert, :validate => :path
+  config :ssl_cert, :validate => :path, :deprecated => "Use 'ssl_certificate' instead."
+
+  # SSL certificate path
+  config :ssl_certificate, :validate => :path
 
   # SSL key path
   config :ssl_key, :validate => :path
@@ -53,6 +80,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   # NOTE: the default setting [] uses SSL engine defaults
   config :ssl_supported_protocols, :validate => ['TLSv1.1', 'TLSv1.2', 'TLSv1.3'], :default => [], :list => true
+
+  # The list of ciphers suite to use
+  config :ssl_cipher_suites, :validate => :string, :list => true
 
   class Client
 
@@ -95,8 +125,8 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     require "openssl"
 
     @ssl_context = new_ssl_context
-    if @ssl_cert
-      @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_cert))
+    if @ssl_certificate
+      @ssl_context.cert = OpenSSL::X509::Certificate.new(File.read(@ssl_certificate))
       if @ssl_key
         # if we have an encrypted key and a password is not provided (nil) than OpenSSL::PKey::RSA
         # prompts the user to enter a password interactively - we do not want to do that,
@@ -104,17 +134,21 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
         @ssl_context.key = OpenSSL::PKey::RSA.new(File.read(@ssl_key), @ssl_key_passphrase.value || '')
       end
     end
-    if @ssl_verify
-      @cert_store = OpenSSL::X509::Store.new
-      # Load the system default certificate path to the store
-      @cert_store.set_default_paths
-      if File.directory?(@ssl_cacert)
-        @cert_store.add_path(@ssl_cacert)
+
+    @ssl_context.cert_store = load_cert_store
+    if server?
+      if @ssl_client_authentication == 'none'
+        @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
       else
-        @cert_store.add_file(@ssl_cacert)
+        @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER
+        @ssl_context.verify_mode |= OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT if @ssl_client_authentication == 'required'
       end
-      @ssl_context.cert_store = @cert_store
-      @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+    else
+      if @ssl_verification_mode == 'none'
+        @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
+      else
+        @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+      end
     end
 
     @ssl_context.min_version = :TLS1_1 # not strictly required - JVM should have disabled TLSv1
@@ -127,6 +161,9 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       disabled_protocols.map! { |v| OpenSSL::SSL.const_get "OP_NO_#{v.sub('.', '_')}" }
       @ssl_context.options = disabled_protocols.reduce(@ssl_context.options, :|)
     end
+
+    @ssl_context.ciphers = @ssl_cipher_suites if @ssl_cipher_suites&.any?
+
     @ssl_context
   end
   private :setup_ssl
@@ -137,13 +174,36 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   end
   private :new_ssl_context
 
+  def new_ssl_certificate_store
+    OpenSSL::X509::Store.new
+  end
+  private :new_ssl_certificate_store
+
+  def load_cert_store
+    cert_store = new_ssl_certificate_store
+    cert_store.set_default_paths
+    @ssl_certificate_authorities&.each do |cert|
+      cert_store.add_file(cert)
+    end
+    cert_store
+  end
+  private :load_cert_store
+
+  def initialize(*args)
+    super(*args)
+    setup_ssl_params!
+  end
+
   # @overload Base#register
   def register
     require "socket"
     require "stud/try"
+
+    validate_ssl_config!
+
     @closed = Concurrent::AtomicBoolean.new(false)
     @thread_no = Concurrent::AtomicFixnum.new(0)
-    setup_ssl if @ssl_enable
+    setup_ssl if @ssl_enabled
 
     if server?
       run_as_server
@@ -160,20 +220,40 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       @logger.error("Could not start tcp server: Address in use", host: @host, port: @port)
       raise
     end
-    if @ssl_enable
+    if @ssl_enabled
       @server_socket = OpenSSL::SSL::SSLServer.new(@server_socket, @ssl_context)
-    end # @ssl_enable
+    end # @ssl_enabled
     @client_threads = Concurrent::Array.new
 
     @accept_thread = Thread.new(@server_socket) do |server_socket|
       LogStash::Util.set_thread_name("[#{pipeline_id}]|output|tcp|server_accept")
       loop do
         break if @closed.value
-        client_socket = server_socket.accept_nonblock exception: false
-        if client_socket == :wait_readable
-          IO.select [ server_socket ]
-          next
+        # OpenSSL::SSL::SSLServer does not support the #accept_nonblock method.
+        # When SSL is enabled, it needs to use the blocking counterpart and ignore
+        # SSLError errors, as they may be client's issues such as missing client's
+        # certificates, ciphers, etc. If it's not rescued here, it would close the
+        # TCP server and exit the plugin.
+        # On the other hand, IOError should normally happen when the pipeline configuration
+        # is reloaded, as the stream gets closed in the thread
+        if @ssl_enabled
+          begin
+            client_socket = server_socket.accept
+          rescue OpenSSL::SSL::SSLError => e
+            log_warn("SSL Error", e)
+            retry unless @closed.value
+          rescue IOError => e
+            log_warn("IO Error", e)
+            retry unless @closed.value
+          end
+        else
+          client_socket = server_socket.accept_nonblock exception: false
+          if client_socket == :wait_readable
+            IO.select [ server_socket ]
+            next
+          end
         end
+
         Thread.start(client_socket) do |client_socket|
           # monkeypatch a 'peer' method onto the socket.
           client_socket.extend(::LogStash::Util::SocketPeer)
@@ -256,7 +336,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def connect
     begin
       client_socket = TCPSocket.new(@host, @port)
-      if @ssl_enable
+      if @ssl_enabled
         client_socket = OpenSSL::SSL::SSLSocket.new(client_socket, @ssl_context)
         begin
           client_socket.connect
@@ -276,6 +356,95 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
       retry
     end
   end # def connect
+
+  def validate_ssl_config!
+    unless @ssl_enabled
+      ignored_ssl_settings = original_params.select { |k| k != 'ssl_enabled' && k != 'ssl_enable' && k.start_with?('ssl_') }
+      @logger.warn("Configured SSL settings are not used when `#{provided_ssl_enabled_config_name}` is set to `false`: #{ignored_ssl_settings.keys}") if ignored_ssl_settings.any?
+      return
+    end
+
+    if @ssl_certificate && !@ssl_key
+      raise LogStash::ConfigurationError, "Using an `ssl_certificate` requires an `ssl_key`"
+    elsif @ssl_key && !@ssl_certificate
+      raise LogStash::ConfigurationError, 'An `ssl_certificate` is required when using an `ssl_key`'
+    end
+
+    if server?
+      validate_server_ssl_config!
+    else
+      validate_client_ssl_config!
+    end
+  end
+
+  def validate_client_ssl_config!
+    if original_params.include?('ssl_client_authentication')
+      raise LogStash::ConfigurationError, "`ssl_client_authentication` must not be configured when mode is `client`, use `ssl_verification_mode` instead."
+    end
+  end
+
+  def validate_server_ssl_config!
+    if original_params.include?('ssl_verification_mode')
+      raise LogStash::ConfigurationError, "`ssl_verification_mode` must not be configured when mode is `server`, use `ssl_client_authentication` instead."
+    end
+
+    if @ssl_certificate.nil?
+      raise LogStash::ConfigurationError, "An `ssl_certificate` is required when `#{provided_ssl_enabled_config_name}` => true"
+    end
+
+    if requires_ssl_certificate_authorities? && (@ssl_certificate_authorities.nil? || @ssl_certificate_authorities.empty?)
+      raise LogStash::ConfigurationError, "An `ssl_certificate_authorities` is required when `ssl_client_authentication` => `#{@ssl_client_authentication}`"
+    end
+  end
+
+  def requires_ssl_certificate_authorities?
+    original_params.include?('ssl_client_authentication') && @ssl_client_authentication != 'none'
+  end
+
+  def provided_ssl_enabled_config_name
+    original_params.include?('ssl_enable') ? 'ssl_enable' : 'ssl_enabled'
+  end
+
+  def setup_ssl_params!
+    @ssl_enabled = normalize_config(:ssl_enabled) do |normalizer|
+      normalizer.with_deprecated_alias(:ssl_enable)
+    end
+
+    @ssl_certificate = normalize_config(:ssl_certificate) do |normalizer|
+      normalizer.with_deprecated_alias(:ssl_cert)
+    end
+
+    if server?
+      @ssl_client_authentication = normalize_config(:ssl_client_authentication) do |normalizer|
+        normalizer.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
+          ssl_verify == true ? 'required' : 'none'
+        end
+      end
+    else
+      @ssl_verification_mode = normalize_config(:ssl_verification_mode) do |normalize|
+        normalize.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
+          ssl_verify == true ? 'full' : 'none'
+        end
+      end
+
+      # Keep backwards compatibility with the default :ssl_verify value (false)
+      if !original_params.include?('ssl_verify') && !original_params.include?('ssl_verification_mode')
+        @ssl_verification_mode = 'none'
+      end
+    end
+
+    @ssl_certificate_authorities = normalize_config(:ssl_certificate_authorities) do |normalize|
+      normalize.with_deprecated_mapping(:ssl_cacert) do |ssl_cacert|
+        if File.directory?(ssl_cacert)
+          Dir.children(ssl_cacert)
+          .map{ |f| File.join(ssl_cacert, f) }
+          .reject{ |f| File.directory?(f) || File.basename(f).start_with?('.') }
+        else
+          [ssl_cacert]
+        end
+      end
+    end
+  end
 
   def server?
     @mode == "server"
