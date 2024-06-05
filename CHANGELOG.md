@@ -1,3 +1,6 @@
+## 6.2.1
+  - Document correct default plugin codec [#54](https://github.com/logstash-plugins/logstash-output-tcp/pull/54)
+
 ## 6.2.0
   - Reviewed and deprecated SSL settings to comply with Logstash's naming convention [#53](https://github.com/logstash-plugins/logstash-output-tcp/pull/53)
     - Deprecated `ssl_enable` in favor of `ssl_enabled`
