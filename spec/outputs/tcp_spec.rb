@@ -374,16 +374,6 @@ describe LogStash::Outputs::Tcp do
         end
       end
 
-      context "with deprecated ssl_verify = true and no ssl_certificate_authorities" do
-        let(:config) { super().merge(
-          'ssl_verify' => true,
-          'ssl_certificate_authorities' => []
-        ) }
-
-        it "should register without errors" do
-          expect { subject.register }.to_not raise_error
-        end
-      end
 
       %w[required optional].each do |ssl_client_authentication|
         context "with ssl_client_authentication = `#{ssl_client_authentication}` and no ssl_certificate_authorities" do
@@ -405,53 +395,6 @@ describe LogStash::Outputs::Tcp do
 
         it "should raise a configuration error" do
           expect{subject.register}.to raise_error(LogStash::ConfigurationError, /`ssl_verification_mode` must not be configured when mode is `server`, use `ssl_client_authentication` instead/)
-        end
-      end
-    end
-
-    context "with deprecated settings" do
-      let(:ssl_verify) { true }
-      let(:certificate_path) { File.join(FIXTURES_PATH, 'plaintext/instance.crt') }
-      let(:config) do
-        {
-          "host" => "127.0.0.1",
-          "port" => port,
-          "ssl_enable" => true,
-          "ssl_cert" => certificate_path,
-          "ssl_key" => File.join(FIXTURES_PATH, 'plaintext/instance.key'),
-          "ssl_verify" => ssl_verify
-        }
-      end
-
-      context "and mode is server" do
-        let(:config) { super().merge("mode" => 'server') }
-        [true, false].each do |verify|
-          context "and ssl_verify is #{verify}" do
-            let(:ssl_verify) { verify }
-
-            it "should set new configs variables" do
-              subject.register
-              expect(subject.instance_variable_get(:@ssl_enabled)).to eql(true)
-              expect(subject.instance_variable_get(:@ssl_client_authentication)).to eql(verify ? 'required' : 'none')
-              expect(subject.instance_variable_get(:@ssl_certificate)).to eql(certificate_path)
-            end
-          end
-        end
-      end
-
-      context "and mode is client" do
-        let(:config) { super().merge("mode" => 'client') }
-        [true, false].each do |verify|
-          context "and ssl_verify is #{verify}" do
-            let(:ssl_verify) { verify }
-
-            it "should set new configs variables" do
-              subject.register
-              expect(subject.instance_variable_get(:@ssl_enabled)).to eql(true)
-              expect(subject.instance_variable_get(:@ssl_verification_mode)).to eql(verify ? 'full' : 'none')
-              expect(subject.instance_variable_get(:@ssl_certificate)).to eql(certificate_path)
-            end
-          end
         end
       end
     end

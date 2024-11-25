@@ -36,9 +36,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   config :mode, :validate => ["server", "client"], :default => "client"
 
   # Enable SSL (must be set for other `ssl_` options to take effect).
-  config :ssl_enable, :validate => :boolean, :default => false, :deprecated => "Use 'ssl_enabled' instead."
-
-  # Enable SSL (must be set for other `ssl_` options to take effect).
   config :ssl_enabled, :validate => :boolean, :default => false
 
   # Controls the server’s behavior in regard to requesting a certificate from client connections.
@@ -48,10 +45,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # This option needs to be used with `ssl_certificate_authorities` and a defined list of CAs.
   config :ssl_client_authentication, :validate => %w[none optional required], :default => 'none'
 
-  # Verify the identity of the other end of the SSL connection against the CA.
-  # For input, sets the field `sslsubject` to that of the client certificate.
-  config :ssl_verify, :validate => :boolean, :default => false, :deprecated => "Use 'ssl_client_authentication' when `mode` is 'server' or 'ssl_verification_mode' when mode is `client`"
-
   # Options to verify the server's certificate.
   # "full": validates that the provided certificate has an issue date that’s within the not_before and not_after dates;
   # chains to a trusted Certificate Authority (CA); has a hostname or IP address that matches the names within the certificate.
@@ -59,15 +52,10 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   # "none": performs no certificate validation. Disabling this severely compromises security (https://www.cs.utexas.edu/~shmat/shmat_ccs12.pdf)
   config :ssl_verification_mode, :validate => %w[full none], :default => 'full'
 
-  # The SSL CA certificate, chainfile or CA path. The system CA path is automatically included.
-  config :ssl_cacert, :validate => :path, :deprecated => "Use 'ssl_certificate_authorities' instead."
 
   # Validate client certificate or certificate chain against these authorities. You can define multiple files.
   # All the certificates will be read and added to the trust store.
   config :ssl_certificate_authorities, :validate => :path, :list => true
-
-  # SSL certificate path
-  config :ssl_cert, :validate => :path, :deprecated => "Use 'ssl_certificate' instead."
 
   # SSL certificate path
   config :ssl_certificate, :validate => :path
@@ -83,6 +71,11 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   # The list of ciphers suite to use
   config :ssl_cipher_suites, :validate => :string, :list => true
+
+  config :ssl_enable, :obsolete  => "Use 'ssl_enabled' instead."
+  config :ssl_verify, :obsolete => "Use 'ssl_client_authentication' when `mode` is 'server' or 'ssl_verification_mode' when mode is `client`"
+  config :ssl_cacert, :obsolete => "Use 'ssl_certificate_authorities' instead."
+  config :ssl_cert, :obsolete => "Use 'ssl_certificate' instead."
 
   class Client
 
@@ -191,7 +184,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
 
   def initialize(*args)
     super(*args)
-    setup_ssl_params!
+    # setup_ssl_params!
   end
 
   # @overload Base#register
@@ -405,46 +398,46 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     original_params.include?('ssl_enable') ? 'ssl_enable' : 'ssl_enabled'
   end
 
-  def setup_ssl_params!
-    @ssl_enabled = normalize_config(:ssl_enabled) do |normalizer|
-      normalizer.with_deprecated_alias(:ssl_enable)
-    end
-
-    @ssl_certificate = normalize_config(:ssl_certificate) do |normalizer|
-      normalizer.with_deprecated_alias(:ssl_cert)
-    end
-
-    if server?
-      @ssl_client_authentication = normalize_config(:ssl_client_authentication) do |normalizer|
-        normalizer.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
-          ssl_verify == true ? 'required' : 'none'
-        end
-      end
-    else
-      @ssl_verification_mode = normalize_config(:ssl_verification_mode) do |normalize|
-        normalize.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
-          ssl_verify == true ? 'full' : 'none'
-        end
-      end
-
-      # Keep backwards compatibility with the default :ssl_verify value (false)
-      if !original_params.include?('ssl_verify') && !original_params.include?('ssl_verification_mode')
-        @ssl_verification_mode = 'none'
-      end
-    end
-
-    @ssl_certificate_authorities = normalize_config(:ssl_certificate_authorities) do |normalize|
-      normalize.with_deprecated_mapping(:ssl_cacert) do |ssl_cacert|
-        if File.directory?(ssl_cacert)
-          Dir.children(ssl_cacert)
-          .map{ |f| File.join(ssl_cacert, f) }
-          .reject{ |f| File.directory?(f) || File.basename(f).start_with?('.') }
-        else
-          [ssl_cacert]
-        end
-      end
-    end
-  end
+  # def setup_ssl_params!
+  #   @ssl_enabled = normalize_config(:ssl_enabled) do |normalizer|
+  #     normalizer.with_deprecated_alias(:ssl_enable)
+  #   end
+  #
+  #   @ssl_certificate = normalize_config(:ssl_certificate) do |normalizer|
+  #     normalizer.with_deprecated_alias(:ssl_cert)
+  #   end
+  #
+  #   if server?
+  #     @ssl_client_authentication = normalize_config(:ssl_client_authentication) do |normalizer|
+  #       normalizer.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
+  #         ssl_verify == true ? 'required' : 'none'
+  #       end
+  #     end
+  #   else
+  #     @ssl_verification_mode = normalize_config(:ssl_verification_mode) do |normalize|
+  #       normalize.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
+  #         ssl_verify == true ? 'full' : 'none'
+  #       end
+  #     end
+  #
+  #     # Keep backwards compatibility with the default :ssl_verify value (false)
+  #     if !original_params.include?('ssl_verify') && !original_params.include?('ssl_verification_mode')
+  #       @ssl_verification_mode = 'none'
+  #     end
+  #   end
+  #
+  #   @ssl_certificate_authorities = normalize_config(:ssl_certificate_authorities) do |normalize|
+  #     normalize.with_deprecated_mapping(:ssl_cacert) do |ssl_cacert|
+  #       if File.directory?(ssl_cacert)
+  #         Dir.children(ssl_cacert)
+  #         .map{ |f| File.join(ssl_cacert, f) }
+  #         .reject{ |f| File.directory?(f) || File.basename(f).start_with?('.') }
+  #       else
+  #         [ssl_cacert]
+  #       end
+  #     end
+  #   end
+  # end
 
   def server?
     @mode == "server"
