@@ -24,6 +24,40 @@ describe LogStash::Outputs::Tcp do
 
   let(:event) { LogStash::Event.new('message' => 'foo bar') }
 
+  describe 'handling obsolete settings for client mode' do
+    [{:name => 'ssl_cert', :replacement => 'ssl_certificate', :sample_value => "certificate_path"},
+     {:name => 'ssl_cacert', :replacement => 'ssl_certificate_authorities', :sample_value => "certificate_path"},
+     {:name => 'ssl_enable', :replacement => 'ssl_enabled', :sample_value => true},
+     {:name => 'ssl_verify', :replacement => 'ssl_client_authentication', :sample_value => 'peer'}].each do | obsolete_setting |
+      context "with obsolete #{obsolete_setting[:name]}" do
+        let (:deprecated_config) do
+          config.merge({obsolete_setting[:name] => obsolete_setting[:sample_value]})
+        end
+
+        it "should raise a config error with the appropriate message" do
+          expect { LogStash::Outputs::Tcp.new(deprecated_config).register }.to raise_error LogStash::ConfigurationError, /The setting `#{obsolete_setting[:name]}` in plugin `tcp` is obsolete and is no longer available. Use '#{obsolete_setting[:replacement]}'/i
+        end
+      end
+    end
+  end
+
+  describe 'handling obsolete settings for server mode' do
+    [{:name => 'ssl_cert', :replacement => 'ssl_certificate', :sample_value => "certificate_path"},
+     {:name => 'ssl_cacert', :replacement => 'ssl_certificate_authorities', :sample_value => "certificate_path"},
+     {:name => 'ssl_enable', :replacement => 'ssl_enabled', :sample_value => true},
+     {:name => 'ssl_verify', :replacement => 'ssl_client_authentication', :sample_value => 'peer'}].each do | obsolete_setting |
+      context "with obsolete #{obsolete_setting[:name]}" do
+        let (:deprecated_config) do
+          config.merge({obsolete_setting[:name] => obsolete_setting[:sample_value]})
+        end
+
+        it "should raise a config error with the appropriate message" do
+          expect { LogStash::Outputs::Tcp.new(deprecated_config).register }.to raise_error LogStash::ConfigurationError, /The setting `#{obsolete_setting[:name]}` in plugin `tcp` is obsolete and is no longer available. Use '#{obsolete_setting[:replacement]}'/i
+        end
+      end
+    end
+  end
+
   context 'failing to connect' do
 
     before { subject.register }
@@ -214,7 +248,7 @@ describe LogStash::Outputs::Tcp do
 
       context 'with supported protocol' do
 
-        let(:config) { super().merge("ssl_supported_protocols" => ['TLSv1.2']) }
+        let(:config) { super().merge("ssl_supported_protocols" => ['TLSv1.2'], "ssl_verification_mode" => "none") }
 
         let(:server_min_version) { 'TLS1_2' }
 
@@ -277,7 +311,7 @@ describe LogStash::Outputs::Tcp do
     context "and protocol is TLSv1.3" do
       let(:key_file) { File.join(FIXTURES_PATH, 'plaintext/instance.key') }
       let(:crt_file) { File.join(FIXTURES_PATH, 'plaintext/instance.crt') }
-      let(:config) { super().merge("ssl_certificate" => crt_file, "ssl_key" => key_file) }
+      let(:config) { super().merge("ssl_certificate" => crt_file, "ssl_key" => key_file, "ssl_verification_mode" => "none") }
 
       let(:secure_server) do
         ssl_context = OpenSSL::SSL::SSLContext.new

@@ -3,7 +3,6 @@ require "logstash/outputs/base"
 require "logstash/namespace"
 require "thread"
 require "logstash/util/socket_peer"
-require "logstash/plugin_mixins/normalize_config_support"
 
 # Write events over a TCP socket.
 #
@@ -12,8 +11,6 @@ require "logstash/plugin_mixins/normalize_config_support"
 # Can either accept connections from clients or connect to a server,
 # depending on `mode`.
 class LogStash::Outputs::Tcp < LogStash::Outputs::Base
-
-  include LogStash::PluginMixins::NormalizeConfigSupport
 
   config_name "tcp"
   concurrency :single
@@ -397,47 +394,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   def provided_ssl_enabled_config_name
     original_params.include?('ssl_enable') ? 'ssl_enable' : 'ssl_enabled'
   end
-
-  # def setup_ssl_params!
-  #   @ssl_enabled = normalize_config(:ssl_enabled) do |normalizer|
-  #     normalizer.with_deprecated_alias(:ssl_enable)
-  #   end
-  #
-  #   @ssl_certificate = normalize_config(:ssl_certificate) do |normalizer|
-  #     normalizer.with_deprecated_alias(:ssl_cert)
-  #   end
-  #
-  #   if server?
-  #     @ssl_client_authentication = normalize_config(:ssl_client_authentication) do |normalizer|
-  #       normalizer.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
-  #         ssl_verify == true ? 'required' : 'none'
-  #       end
-  #     end
-  #   else
-  #     @ssl_verification_mode = normalize_config(:ssl_verification_mode) do |normalize|
-  #       normalize.with_deprecated_mapping(:ssl_verify) do |ssl_verify|
-  #         ssl_verify == true ? 'full' : 'none'
-  #       end
-  #     end
-  #
-  #     # Keep backwards compatibility with the default :ssl_verify value (false)
-  #     if !original_params.include?('ssl_verify') && !original_params.include?('ssl_verification_mode')
-  #       @ssl_verification_mode = 'none'
-  #     end
-  #   end
-  #
-  #   @ssl_certificate_authorities = normalize_config(:ssl_certificate_authorities) do |normalize|
-  #     normalize.with_deprecated_mapping(:ssl_cacert) do |ssl_cacert|
-  #       if File.directory?(ssl_cacert)
-  #         Dir.children(ssl_cacert)
-  #         .map{ |f| File.join(ssl_cacert, f) }
-  #         .reject{ |f| File.directory?(f) || File.basename(f).start_with?('.') }
-  #       else
-  #         [ssl_cacert]
-  #       end
-  #     end
-  #   end
-  # end
 
   def server?
     @mode == "server"
