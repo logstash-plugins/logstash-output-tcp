@@ -5,7 +5,7 @@
     - `ssl_cacert`, which should be replaced by `ssl_certificate_authorities`
     - `ssl_enable`, which should be replaced by `ssl_enabled`
     - `ssl_verify`, which should be replaced by `ssl_client_authentication` when `mode` is `server` or `ssl_verification_mode`when mode is `client`
-    - [xxx](https://github.com/logstash-plugins/logstash-output-tcp/pull/xxx)
+    - [58](https://github.com/logstash-plugins/logstash-output-tcp/pull/58)
 
 ## 6.2.1
   - Document correct default plugin codec [#54](https://github.com/logstash-plugins/logstash-output-tcp/pull/54)
