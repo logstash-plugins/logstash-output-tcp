@@ -179,11 +179,6 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
   end
   private :load_cert_store
 
-  def initialize(*args)
-    super(*args)
-    # setup_ssl_params!
-  end
-
   # @overload Base#register
   def register
     require "socket"
