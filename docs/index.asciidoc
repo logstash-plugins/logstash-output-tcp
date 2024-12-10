@@ -197,7 +197,7 @@ has a hostname or IP address that matches the names within the certificate.
 NOTE: This setting can be used only if <<plugins-{type}s-{plugin}-mode>> is `client`.
 
 [id="plugins-{type}s-{plugin}-obsolete-options"]
-==== TCP Input Obsolete Configuration Options
+==== TCP Output Obsolete Configuration Options
 
 WARNING: As of version `6.0.0` of this plugin, the following configuration options are no longer available,
 and have been replaced by the following options:
