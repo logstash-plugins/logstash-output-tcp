@@ -1,3 +1,11 @@
+## 7.0.0
+  - SSL settings that were marked deprecated in version `6.2.0` are now marked obsolete, and will prevent the plugin from starting.
+  - These settings are:
+      - `ssl_cert`, which should be replaced by `ssl_certificate`
+      - `ssl_cacert`, which should be replaced by `ssl_certificate_authorities`
+      - `ssl_enable`, which should be replaced by `ssl_enabled`
+      - `ssl_verify`, which should be replaced by `ssl_client_authentication` when `mode` is `server` or `ssl_verification_mode`when mode is `client`
+      - [58](https://github.com/logstash-plugins/logstash-output-tcp/pull/58)
 ## 6.2.1
   - Document correct default plugin codec [#54](https://github.com/logstash-plugins/logstash-output-tcp/pull/54)
 
