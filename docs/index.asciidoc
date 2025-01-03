@@ -199,8 +199,8 @@ NOTE: This setting can be used only if <<plugins-{type}s-{plugin}-mode>> is `cli
 [id="plugins-{type}s-{plugin}-obsolete-options"]
 ==== TCP Output Obsolete Configuration Options
 
-WARNING: As of version `6.0.0` of this plugin, the following configuration options are no longer available,
-and have been replaced by the following options:
+WARNING: As of version `6.0.0` of this plugin, some configuration options have been replaced.
+The plugin will fail to start if it contains any of these obsolete options. 
 
 
 [cols="<,<",options="header",]
