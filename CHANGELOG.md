@@ -1,3 +1,6 @@
+## 6.2.2
+  - Invoke post_connection_check on connect [#61](https://github.com/logstash-plugins/logstash-output-tcp/pull/61)
+
 ## 6.2.1
   - Document correct default plugin codec [#54](https://github.com/logstash-plugins/logstash-output-tcp/pull/54)
 

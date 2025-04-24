@@ -279,7 +279,7 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     client_socket = nil
     @codec.on_event do |event, payload|
       begin
-        client_socket = connect unless client_socket
+        client_socket = retryable_connect unless client_socket
         while payload && payload.bytesize > 0
           begin
             written_bytes_size = client_socket.write_nonblock(payload)
@@ -331,32 +331,34 @@ class LogStash::Outputs::Tcp < LogStash::Outputs::Base
     @logger.error(msg, details)
   end
 
-  private
-
   def connect
-    begin
-      client_socket = TCPSocket.new(@host, @port)
-      if @ssl_enabled
-        client_socket = OpenSSL::SSL::SSLSocket.new(client_socket, @ssl_context)
-        begin
-          client_socket.connect
-        rescue OpenSSL::SSL::SSLError => ssle
-          log_error 'connect ssl failure:', ssle, backtrace: false
-          # NOTE(mrichar1): Hack to prevent hammering peer
-          sleep(5)
-          raise
-        end
+    client_socket = TCPSocket.new(@host, @port)
+    if @ssl_enabled
+      client_socket = OpenSSL::SSL::SSLSocket.new(client_socket, @ssl_context)
+      begin
+        client_socket.connect
+        client_socket.post_connection_check(@host) if @ssl_verification_mode == 'full'
+      rescue OpenSSL::SSL::SSLError => ssle
+        log_error 'connect ssl failure:', ssle, backtrace: false
+        client_socket.close rescue nil
+        raise
       end
-      client_socket.extend(::LogStash::Util::SocketPeer)
-      @logger.debug("opened connection", :client => client_socket.peer)
-      return client_socket
-    rescue => e
-      log_error 'failed to connect:', e
-      sleep @reconnect_interval
-      retry
     end
-  end # def connect
+    client_socket.extend(::LogStash::Util::SocketPeer)
+    @logger.debug("opened connection", :client => client_socket.peer)
+    client_socket
+  end
 
+  private
+  def retryable_connect
+    connect
+  rescue => e
+    log_error 'failed to connect:', e
+    sleep @reconnect_interval
+    retry
+  end
+
+  private
   def validate_ssl_config!
     unless @ssl_enabled
       ignored_ssl_settings = original_params.select { |k| k != 'ssl_enabled' && k != 'ssl_enable' && k.start_with?('ssl_') }
