@@ -1,3 +1,6 @@
+## 7.0.1
+  - Invoke post_connection_check on connect [#61](https://github.com/logstash-plugins/logstash-output-tcp/pull/61)
+
 ## 7.0.0
   - SSL settings that were marked deprecated in version `6.2.0` are now marked obsolete, and will prevent the plugin from starting.
   [#58](https://github.com/logstash-plugins/logstash-output-tcp/pull/58)

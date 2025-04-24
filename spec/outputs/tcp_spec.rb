@@ -144,7 +144,7 @@ describe LogStash::Outputs::Tcp do
   context "client mode" do
     before { subject.register }
 
-    let(:config) { super().merge 'mode' => 'client' }
+    let(:config) { super().merge('mode' => 'client', 'host' => 'localhost') }
 
     it 'writes payload data' do
       Thread.start { sleep 0.25; subject.receive event }
@@ -248,11 +248,48 @@ describe LogStash::Outputs::Tcp do
           expect( read ).to end_with 'foo bar'
         end
 
+        context 'with ssl_verification_mode => full' do
+          let(:config) do
+            {
+              "mode" => "client",
+              "host" => "localhost",
+              "port" => port,
+              "ssl_enabled" => true,
+              "ssl_certificate_authorities" => crt_file,
+              "ssl_verification_mode" => "full",
+              "codec" => "plain"
+            }
+          end
+
+          context "with right host name" do
+            let(:config) { super().merge("host" => "localhost") }
+            it 'reads plain data' do
+              thread = Thread.start { sleep 0.25; subject.receive event }
+              socket = secure_server.accept
+              read = socket.sysread(100)
+              expect( read.size ).to be > 0
+              expect( read ).to end_with 'foo bar'
+            end
+          end
+
+          context "with wrong host name" do
+            let(:config) { super().merge("host" => "127.0.0.1") }
+            it 'closes the connection' do
+              thread = Thread.start do
+                sleep 0.25
+                expect { subject.connect }.to raise_error(OpenSSL::SSL::SSLError, /hostname "127.0.0.1" does not match the server certificate/)
+              end
+              secure_server.accept rescue nil # the other side will close the connection potentially causing a "Socket closed" error
+              thread.join
+            end
+          end
+        end
+
       end
 
       context 'with unsupported protocol (on server)' do
 
-        let(:config) { super().merge("ssl_supported_protocols" => ['TLSv1.1']) }
+        let(:config) { super().merge("ssl_supported_protocols" => ['TLSv1.1'], "reconnect_interval" => 1) }
 
         let(:server_min_version) { 'TLS1_2' }
 
@@ -260,16 +297,16 @@ describe LogStash::Outputs::Tcp do
         after { secure_server.close }
 
         it 'fails (and loops retrying)' do
-          expect(subject.logger).to receive(:error).with(/connect ssl failure/i, hash_including(message: /No appropriate protocol/i)).and_call_original
-          expect(subject.logger).to receive(:error).with(/failed to connect/i, hash_including(exception: OpenSSL::SSL::SSLError)).and_call_original
+          expect(subject.logger).to receive(:error).twice.with(/connect ssl failure/i, hash_including(message: /No appropriate protocol/i)).and_call_original
+          expect(subject.logger).to receive(:error).twice.with(/failed to connect/i, hash_including(exception: OpenSSL::SSL::SSLError)).and_call_original
           expect(subject).to receive(:sleep).once.and_call_original
           expect(subject).to receive(:sleep).once.and_throw :TEST_DONE # to be able to abort the retry loop
 
           Thread.start { secure_server.accept rescue nil }
-          expect { subject.receive event }.to throw_symbol(:TEST_DONE)
+          expect { sleep 0.25; subject.receive event }.to throw_symbol(:TEST_DONE)
         end
 
-      end if LOGSTASH_VERSION > '7.0'
+      end
 
     end
 
