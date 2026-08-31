@@ -178,15 +178,17 @@ describe LogStash::Outputs::Tcp do
 
     context "and providing a certificate/key pair" do
       let(:cert_key_pair) { Flores::PKI.generate }
+      let(:certificate_file) { Tempfile.new('certificate') }
       let(:certificate) do
-        path = Tempfile.new('certificate').path
-        IO.write(path, cert_key_pair.first.to_s)
-        path
+        certificate_file.write(cert_key_pair.first.to_s)
+        certificate_file.flush
+        certificate_file.path
       end
+      let(:key_file_tmp) { Tempfile.new('key') }
       let(:key) do
-        path = Tempfile.new('key').path
-        IO.write(path, cert_key_pair[1].to_s)
-        path
+        key_file_tmp.write(cert_key_pair[1].to_s)
+        key_file_tmp.flush
+        key_file_tmp.path
       end
       let(:config) { super().merge("ssl_certificate" => certificate, "ssl_key" => key) }
 
